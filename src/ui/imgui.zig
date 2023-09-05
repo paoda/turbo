@@ -32,8 +32,8 @@ pub fn draw(state: *const State, top_tex: GLuint, btm_tex: GLuint, arm946es: *Ar
         _ = zgui.begin(window_title, .{ .flags = .{ .no_resize = true, .always_auto_resize = true } });
         defer zgui.end();
 
-        zgui.image(@ptrFromInt(top_tex), .{ .w = w, .h = h, .uv0 = .{ 0, 1 }, .uv1 = .{ 1, 0 } });
-        zgui.image(@ptrFromInt(btm_tex), .{ .w = w, .h = h, .uv0 = .{ 0, 1 }, .uv1 = .{ 1, 0 } });
+        zgui.image(@ptrFromInt(top_tex), .{ .w = w, .h = h });
+        zgui.image(@ptrFromInt(btm_tex), .{ .w = w, .h = h });
     }
 
     return true;

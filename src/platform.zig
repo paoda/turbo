@@ -39,7 +39,7 @@ pub const Ui = struct {
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
-        if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MAJOR_VERSION, 3) < 0) panic();
+        if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_MINOR_VERSION, 3) < 0) panic();
 
         const window = SDL.SDL_CreateWindow(
             window_title,
@@ -90,20 +90,20 @@ pub const Ui = struct {
     pub fn run(self: *Self, nds7_group: nds7.Group, nds9_group: nds9.Group) !void {
         // TODO: Sort this out please
 
-        const objects = opengl_impl.createObjects();
-        defer gl.deleteBuffers(3, &[_]GLuint{ objects.vao, objects.vbo, objects.ebo });
+        const vao_id = opengl_impl.vao();
+        defer gl.deleteVertexArrays(1, &[_]GLuint{vao_id});
 
-        const top_tex = opengl_impl.createScreenTexture(nds9_group.bus.ppu.fb.top(.front));
-        const btm_tex = opengl_impl.createScreenTexture(nds9_group.bus.ppu.fb.btm(.front));
-        const top_out_tex = opengl_impl.createOutputTexture();
-        const btm_out_tex = opengl_impl.createOutputTexture();
+        const top_tex = opengl_impl.screenTex(nds9_group.bus.ppu.fb.top(.front));
+        const btm_tex = opengl_impl.screenTex(nds9_group.bus.ppu.fb.btm(.front));
+        const top_out_tex = opengl_impl.outTex();
+        const btm_out_tex = opengl_impl.outTex();
         defer gl.deleteTextures(4, &[_]GLuint{ top_tex, top_out_tex, btm_tex, btm_out_tex });
 
-        const top_fbo = try opengl_impl.createFrameBuffer(top_out_tex);
-        const btm_fbo = try opengl_impl.createFrameBuffer(btm_out_tex);
+        const top_fbo = try opengl_impl.frameBuffer(top_out_tex);
+        const btm_fbo = try opengl_impl.frameBuffer(btm_out_tex);
         defer gl.deleteFramebuffers(2, &[_]GLuint{ top_fbo, btm_fbo });
 
-        const prog_id = try opengl_impl.compileShaders();
+        const prog_id = try opengl_impl.program();
         defer gl.deleteProgram(prog_id);
 
         var event: SDL.SDL_Event = undefined;
@@ -175,7 +175,7 @@ pub const Ui = struct {
                 defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
                 gl.viewport(0, 0, nds_width, nds_height);
-                opengl_impl.drawScreenTexture(top_tex, prog_id, objects, nds9_group.bus.ppu.fb.top(.front));
+                opengl_impl.drawScreen(top_tex, prog_id, vao_id, nds9_group.bus.ppu.fb.top(.front));
             }
 
             {
@@ -183,7 +183,7 @@ pub const Ui = struct {
                 defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
                 gl.viewport(0, 0, nds_width, nds_height);
-                opengl_impl.drawScreenTexture(btm_tex, prog_id, objects, nds9_group.bus.ppu.fb.btm(.front));
+                opengl_impl.drawScreen(btm_tex, prog_id, vao_id, nds9_group.bus.ppu.fb.btm(.front));
             }
 
             const zgui_redraw = imgui.draw(&self.state, top_out_tex, btm_out_tex, nds9_group.cpu);
@@ -213,44 +213,24 @@ fn panic() noreturn {
 }
 
 const opengl_impl = struct {
-    // zig fmt: off
-    const vertices: [32]f32 = [_]f32{
-        // Positions        // Colours      // Texture Coords
-         1.0, -1.0, 0.0,    1.0, 0.0, 0.0,  1.0, 1.0, // Top Right
-         1.0,  1.0, 0.0,    0.0, 1.0, 0.0,  1.0, 0.0, // Bottom Right
-        -1.0,  1.0, 0.0,    0.0, 0.0, 1.0,  0.0, 0.0, // Bottom Left
-        -1.0, -1.0, 0.0,    1.0, 1.0, 0.0,  0.0, 1.0, // Top Left
-    };
-
-    const indices: [6]u32 = [_]u32{
-        0, 1, 3, // First Triangle
-        1, 2, 3, // Second Triangle
-    };
-    // zig fmt: on
-
-    const Objects = struct { vao: GLuint, vbo: GLuint, ebo: GLuint };
-
-    fn drawScreenTexture(tex_id: GLuint, prog_id: GLuint, ids: Objects, buf: []const u8) void {
+    fn drawScreen(tex_id: GLuint, prog_id: GLuint, vao_id: GLuint, buf: []const u8) void {
         gl.bindTexture(gl.TEXTURE_2D, tex_id);
         defer gl.bindTexture(gl.TEXTURE_2D, 0);
 
         gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, nds_width, nds_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
 
-        // Bind VAO, EBO. VBO not bound
-        gl.bindVertexArray(ids.vao); // VAO
+        // Bind VAO
+        gl.bindVertexArray(vao_id); // VAO
         defer gl.bindVertexArray(0);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ids.ebo); // EBO
-        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
 
         // Use compiled frag + vertex shader
         gl.useProgram(prog_id);
         defer gl.useProgram(0);
 
-        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_INT, null);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 3);
     }
 
-    fn compileShaders() !GLuint {
+    fn program() !GLuint {
         const vert_shader = @embedFile("shader/pixelbuf.vert");
         const frag_shader = @embedFile("shader/pixelbuf.frag");
 
@@ -270,50 +250,22 @@ const opengl_impl = struct {
 
         if (!shader.didCompile(fs)) return error.FragmentCompileError;
 
-        const program = gl.createProgram();
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
+        const prog = gl.createProgram();
+        gl.attachShader(prog, vs);
+        gl.attachShader(prog, fs);
+        gl.linkProgram(prog);
 
-        return program;
+        return prog;
     }
 
-    // Returns the VAO ID since it's used in run()
-    fn createObjects() Objects {
+    fn vao() GLuint {
         var vao_id: GLuint = undefined;
-        var vbo_id: GLuint = undefined;
-        var ebo_id: GLuint = undefined;
-
         gl.genVertexArrays(1, &vao_id);
-        gl.genBuffers(1, &vbo_id);
-        gl.genBuffers(1, &ebo_id);
 
-        gl.bindVertexArray(vao_id);
-        defer gl.bindVertexArray(0);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, vbo_id);
-        defer gl.bindBuffer(gl.ARRAY_BUFFER, 0);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo_id);
-        defer gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, 0);
-
-        gl.bufferData(gl.ARRAY_BUFFER, @sizeOf(@TypeOf(vertices)), &vertices, gl.STATIC_DRAW);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, @sizeOf(@TypeOf(indices)), &indices, gl.STATIC_DRAW);
-
-        // Position
-        gl.vertexAttribPointer(0, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), null); // lmao
-        gl.enableVertexAttribArray(0);
-        // Colour
-        gl.vertexAttribPointer(1, 3, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @ptrFromInt((3 * @sizeOf(f32))));
-        gl.enableVertexAttribArray(1);
-        // Texture Coord
-        gl.vertexAttribPointer(2, 2, gl.FLOAT, gl.FALSE, 8 * @sizeOf(f32), @ptrFromInt((6 * @sizeOf(f32))));
-        gl.enableVertexAttribArray(2);
-
-        return .{ .vao = vao_id, .vbo = vbo_id, .ebo = ebo_id };
+        return vao_id;
     }
 
-    fn createScreenTexture(buf: []const u8) GLuint {
+    fn screenTex(buf: []const u8) GLuint {
         var tex_id: GLuint = undefined;
         gl.genTextures(1, &tex_id);
 
@@ -328,7 +280,7 @@ const opengl_impl = struct {
         return tex_id;
     }
 
-    fn createOutputTexture() GLuint {
+    fn outTex() GLuint {
         var tex_id: GLuint = undefined;
         gl.genTextures(1, &tex_id);
 
@@ -343,7 +295,7 @@ const opengl_impl = struct {
         return tex_id;
     }
 
-    fn createFrameBuffer(tex_id: GLuint) !GLuint {
+    fn frameBuffer(tex_id: GLuint) !GLuint {
         var fbo_id: GLuint = undefined;
         gl.genFramebuffers(1, &fbo_id);
 
