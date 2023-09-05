@@ -1,6 +1,6 @@
 const std = @import("std");
 
-/// For use with withe tiniest ROM
+/// For use with with the tiniest ROM
 pub const Header = extern struct {
     title: [12]u8,
     game_code: [4]u8,
@@ -79,8 +79,7 @@ pub const Header = extern struct {
 
     // note, we're missing some debug_ prefixed fields here
     // but we want the header struct to be 0x160 bytes so that
-    // the smallest NDS rom's header can be read without any speicifc
-    // workarounds
+    // the smallest NDS rom's header can be read without any specific workarounds
     // TODO: Determine if we ever will need those debug fields, and if so: Implement them
 
     comptime {
