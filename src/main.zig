@@ -8,7 +8,7 @@ const emu = @import("core/emu.zig");
 const IBus = @import("arm32").Bus;
 const IScheduler = @import("arm32").Scheduler;
 const Ui = @import("platform.zig").Ui;
-const SharedIo = @import("core/io.zig").Io;
+const SharedContext = @import("core/emu.zig").SharedContext;
 
 const Allocator = std.mem.Allocator;
 const ClapResult = clap.Result(clap.Help, &cli_params, clap.parsers.default);
@@ -36,14 +36,12 @@ pub fn main() !void {
     const rom_file = try std.fs.cwd().openFile(rom_path, .{});
     defer rom_file.close();
 
-    // FIXME: Perf win to allocating on the stack instead?
-    const shared_io = try allocator.create(SharedIo);
-    defer allocator.destroy(shared_io);
-    shared_io.* = .{};
+    const shared_ctx = try SharedContext.init(allocator);
+    defer shared_ctx.deinit(allocator);
 
     const nds9_group: nds9.Group = blk: {
         var scheduler = try nds9.Scheduler.init(allocator);
-        var bus = try nds9.Bus.init(allocator, &scheduler, shared_io);
+        var bus = try nds9.Bus.init(allocator, &scheduler, shared_ctx);
         var arm946es = nds9.Arm946es.init(IScheduler.init(&scheduler), IBus.init(&bus));
 
         break :blk .{ .cpu = &arm946es, .bus = &bus, .scheduler = &scheduler };
@@ -52,7 +50,7 @@ pub fn main() !void {
 
     const nds7_group: nds7.Group = blk: {
         var scheduler = try nds7.Scheduler.init(allocator);
-        var bus = try nds7.Bus.init(allocator, &scheduler, shared_io);
+        var bus = try nds7.Bus.init(allocator, &scheduler, shared_ctx);
         var arm7tdmi = nds7.Arm7tdmi.init(IScheduler.init(&scheduler), IBus.init(&bus));
 
         break :blk .{ .cpu = &arm7tdmi, .bus = &bus, .scheduler = &scheduler };

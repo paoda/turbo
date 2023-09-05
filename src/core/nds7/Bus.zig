@@ -4,6 +4,7 @@ const io = @import("io.zig");
 
 const Scheduler = @import("Scheduler.zig");
 const SharedIo = @import("../io.zig").Io;
+const SharedContext = @import("../emu.zig").SharedContext;
 
 const Allocator = std.mem.Allocator;
 
@@ -18,20 +19,16 @@ main: *[4 * MiB]u8,
 wram: *[64 * KiB]u8,
 io: io.Io,
 
-pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_io: *SharedIo) !@This() {
-    const main_mem = try allocator.create([4 * MiB]u8);
-    errdefer allocator.destroy(main_mem);
-    @memset(main_mem, 0);
-
+pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_ctx: SharedContext) !@This() {
     const wram = try allocator.create([64 * KiB]u8);
     errdefer allocator.destroy(wram);
     @memset(wram, 0);
 
     return .{
-        .main = main_mem,
+        .main = shared_ctx.main,
         .wram = wram,
         .scheduler = scheduler,
-        .io = io.Io.init(shared_io),
+        .io = io.Io.init(shared_ctx.io),
     };
 }
 

@@ -3,6 +3,7 @@ const nds9 = @import("nds9.zig");
 const nds7 = @import("nds7.zig");
 
 const Header = @import("cartridge.zig").Header;
+const SharedIo = @import("io.zig").Io;
 const Arm946es = nds9.Arm946es;
 
 const Allocator = std.mem.Allocator;
@@ -107,3 +108,26 @@ pub fn runFrame(nds7_group: nds7.Group, nds9_group: nds9.Group) void {
         }
     }
 }
+
+// FIXME: Perf win to allocating on the stack instead?
+pub const SharedContext = struct {
+    const MiB = 0x100000;
+
+    io: *SharedIo,
+    main: *[4 * MiB]u8,
+
+    pub fn init(allocator: Allocator) !@This() {
+        const ctx = .{
+            .io = try allocator.create(SharedIo),
+            .main = try allocator.create([4 * MiB]u8),
+        };
+        ctx.io.* = .{};
+
+        return ctx;
+    }
+
+    pub fn deinit(self: @This(), allocator: Allocator) void {
+        allocator.destroy(self.io);
+        allocator.destroy(self.main);
+    }
+};

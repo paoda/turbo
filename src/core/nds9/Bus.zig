@@ -2,7 +2,7 @@ const std = @import("std");
 
 const Ppu = @import("../ppu.zig").Ppu;
 const Scheduler = @import("Scheduler.zig");
-const SharedIo = @import("../io.zig").Io;
+const SharedContext = @import("../emu.zig").SharedContext;
 const io = @import("io.zig");
 
 const Allocator = std.mem.Allocator;
@@ -20,11 +20,7 @@ ppu: Ppu,
 
 scheduler: *Scheduler,
 
-pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_io: *SharedIo) !@This() {
-    const main_mem = try allocator.create([4 * MiB]u8);
-    errdefer allocator.destroy(main_mem);
-    @memset(main_mem, 0);
-
+pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_ctx: SharedContext) !@This() {
     const vram1_mem = try allocator.create([512 * KiB]u8);
     errdefer allocator.destroy(vram1_mem);
     @memset(vram1_mem, 0);
@@ -33,11 +29,11 @@ pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_io: *SharedIo) !
     scheduler.push(.draw, 256 * dots_per_cycle);
 
     return .{
-        .main = main_mem,
+        .main = shared_ctx.main,
         .vram1 = vram1_mem,
         .ppu = try Ppu.init(allocator),
         .scheduler = scheduler,
-        .io = io.Io.init(shared_io),
+        .io = io.Io.init(shared_ctx.io),
     };
 }
 
