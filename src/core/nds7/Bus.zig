@@ -33,7 +33,6 @@ pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_ctx: SharedConte
 }
 
 pub fn deinit(self: *@This(), allocator: Allocator) void {
-    allocator.destroy(self.main);
     allocator.destroy(self.wram);
 }
 

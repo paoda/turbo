@@ -23,7 +23,7 @@ const nds_height = ppu.screen_height;
 
 pub const Dimensions = struct { width: u32, height: u32 };
 
-const window_title = "Turbo (Name Pending)";
+const window_title = "Turbo";
 
 pub const Ui = struct {
     const Self = @This();
@@ -82,8 +82,7 @@ pub const Ui = struct {
         SDL.SDL_Quit();
     }
 
-    fn glGetProcAddress(ctx: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {
-        _ = ctx;
+    fn glGetProcAddress(_: SDL.SDL_GLContext, proc: [:0]const u8) ?*anyopaque {
         return SDL.SDL_GL_GetProcAddress(proc.ptr);
     }
 
@@ -220,7 +219,7 @@ const opengl_impl = struct {
         gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, nds_width, nds_height, gl.RGBA, gl.UNSIGNED_INT_8_8_8_8, buf.ptr);
 
         // Bind VAO
-        gl.bindVertexArray(vao_id); // VAO
+        gl.bindVertexArray(vao_id);
         defer gl.bindVertexArray(0);
 
         // Use compiled frag + vertex shader
@@ -303,9 +302,7 @@ const opengl_impl = struct {
         defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
         gl.framebufferTexture(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, tex_id, 0);
-
-        const draw_buffers: [1]GLuint = .{gl.COLOR_ATTACHMENT0};
-        gl.drawBuffers(1, &draw_buffers);
+        gl.drawBuffers(1, &@as(GLuint, gl.COLOR_ATTACHMENT0));
 
         if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE)
             return error.FrameBufferObejctInitFailed;
@@ -314,7 +311,6 @@ const opengl_impl = struct {
     }
 
     const shader = struct {
-        const Kind = enum { vertex, fragment };
         const log = std.log.scoped(.shader);
 
         fn didCompile(id: gl.GLuint) bool {
