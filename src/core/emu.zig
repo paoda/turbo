@@ -131,3 +131,12 @@ pub const SharedContext = struct {
         allocator.destroy(self.main);
     }
 };
+
+pub inline fn forceAlign(comptime T: type, address: u32) u32 {
+    return switch (T) {
+        u32 => address & ~@as(u32, 3),
+        u16 => address & ~@as(u32, 1),
+        u8 => address,
+        else => @compileError("Bus: Invalid read/write type"),
+    };
+}

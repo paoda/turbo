@@ -1,10 +1,10 @@
 const std = @import("std");
-
 const io = @import("io.zig");
 
 const Scheduler = @import("Scheduler.zig");
 const SharedIo = @import("../io.zig").Io;
 const SharedContext = @import("../emu.zig").SharedContext;
+const forceAlign = @import("../emu.zig").forceAlign;
 
 const Allocator = std.mem.Allocator;
 
@@ -50,17 +50,19 @@ fn _read(self: *@This(), comptime T: type, comptime mode: Mode, address: u32) T 
     const byte_count = @divExact(@typeInfo(T).Int.bits, 8);
     const readInt = std.mem.readIntLittle;
 
+    const aligned_addr = forceAlign(T, address);
+
     switch (mode) {
-        // .debug => log.debug("read {} from 0x{X:0>8}", .{ T, address }),
+        // .debug => log.debug("read {} from 0x{X:0>8}", .{ T, aligned_addr }),
         .debug => {},
         else => self.scheduler.tick += 1,
     }
 
-    return switch (address) {
-        0x0200_0000...0x02FF_FFFF => readInt(T, self.main[address & 0x003F_FFFF ..][0..byte_count]),
-        0x0380_0000...0x0380_FFFF => readInt(T, self.wram[address & 0x0000_FFFF ..][0..byte_count]),
-        0x0400_0000...0x04FF_FFFF => io.read(self, T, address),
-        else => warn("unexpected read: 0x{x:0>8} -> {}", .{ address, T }),
+    return switch (aligned_addr) {
+        0x0200_0000...0x02FF_FFFF => readInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count]),
+        0x0380_0000...0x0380_FFFF => readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count]),
+        0x0400_0000...0x04FF_FFFF => io.read(self, T, aligned_addr),
+        else => warn("unexpected read: 0x{x:0>8} -> {}", .{ aligned_addr, T }),
     };
 }
 
@@ -76,17 +78,19 @@ fn _write(self: *@This(), comptime T: type, comptime mode: Mode, address: u32, v
     const byte_count = @divExact(@typeInfo(T).Int.bits, 8);
     const writeInt = std.mem.writeIntLittle;
 
+    const aligned_addr = forceAlign(T, address);
+
     switch (mode) {
-        // .debug => log.debug("wrote 0x{X:}{} to 0x{X:0>8}", .{ value, T, address }),
+        // .debug => log.debug("wrote 0x{X:}{} to 0x{X:0>8}", .{ value, T, aligned_addr }),
         .debug => {},
         else => self.scheduler.tick += 1,
     }
 
-    switch (address) {
-        0x0200_0000...0x02FF_FFFF => writeInt(T, self.main[address & 0x003F_FFFF ..][0..byte_count], value),
-        0x0380_0000...0x0380_FFFF => writeInt(T, self.wram[address & 0x0000_FFFF ..][0..byte_count], value),
-        0x0400_0000...0x04FF_FFFF => io.write(self, T, address, value),
-        else => log.warn("unexpected write: 0x{X:}{} -> 0x{X:0>8}", .{ value, T, address }),
+    switch (aligned_addr) {
+        0x0200_0000...0x02FF_FFFF => writeInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count], value),
+        0x0380_0000...0x0380_FFFF => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
+        0x0400_0000...0x04FF_FFFF => io.write(self, T, aligned_addr, value),
+        else => log.warn("unexpected write: 0x{X:}{} -> 0x{X:0>8}", .{ value, T, aligned_addr }),
     }
 }
 
