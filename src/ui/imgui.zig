@@ -15,7 +15,7 @@ pub const State = struct {
     const default_rom_title: [12:0]u8 = "No Title\x00\x00\x00\x00".*;
 
     title: [12:0]u8 = default_rom_title,
-    dim: Dimensions = .{ .width = 1280, .height = 720 },
+    dim: Dimensions = .{ .width = 1600, .height = 900 },
 };
 
 pub fn draw(state: *const State, top_tex: GLuint, btm_tex: GLuint, arm946es: *Arm946es) bool {
@@ -23,8 +23,8 @@ pub fn draw(state: *const State, top_tex: GLuint, btm_tex: GLuint, arm946es: *Ar
     zgui.backend.newFrame(@floatFromInt(state.dim.width), @floatFromInt(state.dim.height));
 
     {
-        const w: f32 = @floatFromInt((nds_width * 3) / 2);
-        const h: f32 = @floatFromInt((nds_height * 3) / 2);
+        const w: f32 = @floatFromInt(nds_width * 2);
+        const h: f32 = @floatFromInt(nds_height * 2);
 
         const provided = std.mem.sliceTo(&state.title, 0);
         const window_title = if (provided.len == 0) &State.default_rom_title else provided;
