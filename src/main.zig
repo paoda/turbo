@@ -7,6 +7,8 @@ const emu = @import("core/emu.zig");
 
 const IBus = @import("arm32").Bus;
 const IScheduler = @import("arm32").Scheduler;
+const ICoprocessor = @import("arm32").Coprocessor;
+
 const Ui = @import("platform.zig").Ui;
 const SharedContext = @import("core/emu.zig").SharedContext;
 
@@ -42,7 +44,9 @@ pub fn main() !void {
     const nds9_group: nds9.Group = blk: {
         var scheduler = try nds9.Scheduler.init(allocator);
         var bus = try nds9.Bus.init(allocator, &scheduler, shared_ctx);
-        var arm946es = nds9.Arm946es.init(IScheduler.init(&scheduler), IBus.init(&bus));
+        var cp15 = nds9.Cp15{};
+
+        var arm946es = nds9.Arm946es.init(IScheduler.init(&scheduler), IBus.init(&bus), ICoprocessor.init(&cp15));
 
         break :blk .{ .cpu = &arm946es, .bus = &bus, .scheduler = &scheduler };
     };

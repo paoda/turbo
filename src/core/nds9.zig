@@ -1,6 +1,7 @@
 const std = @import("std");
 
 pub const Bus = @import("nds9/Bus.zig");
+pub const Cp15 = @import("nds9/Cp15.zig");
 pub const io = @import("nds9/io.zig");
 pub const Scheduler = @import("nds9/Scheduler.zig");
 pub const Arm946es = @import("arm32").Arm946es;
