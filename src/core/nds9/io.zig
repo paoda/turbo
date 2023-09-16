@@ -27,26 +27,22 @@ pub const Io = struct {
 
 pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
     return switch (T) {
-        // zig fmt: off
-        u32 => 
-              @as(T, read(bus, u8, address + 3)) << 24
-            | @as(T, read(bus, u8, address + 2)) << 16
-            | @as(T, read(bus, u8, address + 1)) << 8
-            | read(bus, u8, address + 0) << 0,
-        // zig fmt: on
-        u16 => @as(T, read(bus, u8, address + 1)) << 8 | read(bus, u8, address),
+        u32 => switch (address) {
+            0x0400_0208 => @intFromBool(bus.io.shared.ime),
+            0x0400_0210 => bus.io.shared.ie,
+            0x0400_0214 => bus.io.shared.irq,
+            else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
+        },
+        u16 => switch (address) {
+            0x0400_0004 => bus.ppu.io.dispstat.raw,
+            0x0400_0130 => bus.io.keyinput.load(.Monotonic),
+
+            0x0400_0180 => @truncate(bus.io.shared.ipc_sync.raw),
+            0x0400_0184 => @truncate(bus.io.shared.ipc_fifo_cnt.raw),
+            else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
+        },
         u8 => switch (address) {
-            0x0400_0000...0x0400_0003 => valueAtAddressOffset(u32, address, bus.ppu.io.dispcnt_a.raw),
-            0x0400_0004...0x0400_0005 => valueAtAddressOffset(u16, address, bus.ppu.io.dispstat.raw),
-
-            0x0400_0130...0x0400_0131 => valueAtAddressOffset(u16, address, bus.io.keyinput.load(.Monotonic)),
-            0x0400_0180...0x0400_0183 => valueAtAddressOffset(u32, address, bus.io.shared.ipc_sync.raw),
-            0x0400_0184...0x0400_0187 => valueAtAddressOffset(u32, address, bus.io.shared.ipc_fifo_cnt.raw),
-
-            0x0400_0208...0x0400_020B => valueAtAddressOffset(u32, address, @intFromBool(bus.io.shared.ime)),
-
-            0x0400_0304...0x0400_0307 => valueAtAddressOffset(u32, address, bus.io.powcnt.raw),
-            else => warn("unexpected read: 0x{X:0>8}", .{address}),
+            else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         else => @compileError(T ++ " is an unsupported bus read type"),
     };
@@ -54,32 +50,41 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
 
 pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
     switch (T) {
-        u32 => {
-            write(bus, u8, address + 3, @as(u8, @truncate(value >> 24)));
-            write(bus, u8, address + 2, @as(u8, @truncate(value >> 16)));
-            write(bus, u8, address + 1, @as(u8, @truncate(value >> 8)));
-            write(bus, u8, address + 0, @as(u8, @truncate(value >> 0)));
-        },
-        u16 => {
-            write(bus, u8, address + 1, @as(u8, @truncate(value >> 8)));
-            write(bus, u8, address + 0, @as(u8, @truncate(value >> 0)));
-        },
-        u8 => switch (address) {
-            0x0400_0000...0x0400_0003 => writeToAddressOffset(&bus.ppu.io.dispcnt_a.raw, address, value),
+        u32 => switch (address) {
+            0x0400_0000 => bus.ppu.io.dispcnt_a.raw = value,
+            0x0400_0180 => bus.io.shared.ipc_sync.raw = value,
+            0x0400_0184 => bus.io.shared.ipc_fifo_cnt.raw = value,
+            0x0400_0188 => bus.io.shared.ipc_fifo_send = value,
 
-            0x0400_0180...0x0400_0183 => writeToAddressOffset(&bus.io.shared.ipc_sync.raw, address, value),
-            0x0400_0184...0x0400_0187 => writeToAddressOffset(&bus.io.shared.ipc_fifo_cnt.raw, address, value),
+            0x0400_0240 => {
+                bus.ppu.io.vramcnt_a.raw = @truncate(value >> 0); // 0x0400_0240
+                bus.ppu.io.vramcnt_b.raw = @truncate(value >> 8); // 0x0400_0241
+                bus.ppu.io.vramcnt_c.raw = @truncate(value >> 16); // 0x0400_0242
+                bus.ppu.io.vramcnt_d.raw = @truncate(value >> 24); // 0x0400_0243
+            },
 
             0x0400_0208 => bus.io.shared.ime = value & 1 == 1,
-            0x0400_0209...0x0400_020B => {}, // unused bytes from IME
+            0x0400_0210 => bus.io.shared.ie = value,
+            0x0400_0214 => bus.io.shared.irq = value,
 
+            0x0400_0304 => bus.io.powcnt.raw = value,
+
+            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
+        },
+        u16 => switch (address) {
+            0x0400_0180 => bus.io.shared.ipc_sync.raw = value,
+            0x0400_0184 => bus.io.shared.ipc_fifo_cnt.raw = value,
+            0x0400_0208 => bus.io.shared.ime = value & 1 == 1,
+
+            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
+        },
+        u8 => switch (address) {
             0x0400_0240 => bus.ppu.io.vramcnt_a.raw = value,
             0x0400_0241 => bus.ppu.io.vramcnt_b.raw = value,
             0x0400_0242 => bus.ppu.io.vramcnt_c.raw = value,
             0x0400_0243 => bus.ppu.io.vramcnt_d.raw = value,
 
-            0x0400_0304...0x0400_0307 => writeToAddressOffset(&bus.io.powcnt.raw, address, value),
-            else => log.warn("unexpected write: 0x{X:}u8 -> 0x{X:0>8}", .{ value, address }),
+            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
         else => @compileError(T ++ " is an unsupported bus write type"),
     }
