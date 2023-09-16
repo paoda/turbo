@@ -71,25 +71,6 @@ const arm9_clock = bus_clock * 2;
 pub fn runFrame(nds7_group: nds7.Group, nds9_group: nds9.Group) void {
     // TODO: might be more efficient to run them both in the same loop?
     {
-        const scheduler = nds7_group.scheduler;
-
-        const cycles_per_dot = arm7_clock / dot_clock + 1;
-        comptime std.debug.assert(cycles_per_dot == 6);
-
-        const cycles_per_frame = 355 * 263 * cycles_per_dot;
-        const frame_end = scheduler.tick + cycles_per_frame;
-
-        const cpu = nds7_group.cpu;
-        const bus = nds7_group.bus;
-
-        while (scheduler.tick < frame_end) {
-            cpu.step();
-
-            if (scheduler.tick >= scheduler.next()) scheduler.handle(bus);
-        }
-    }
-
-    {
         const scheduler = nds9_group.scheduler;
 
         const cycles_per_dot = arm9_clock / dot_clock + 1;
@@ -100,6 +81,25 @@ pub fn runFrame(nds7_group: nds7.Group, nds9_group: nds9.Group) void {
 
         const cpu = nds9_group.cpu;
         const bus = nds9_group.bus;
+
+        while (scheduler.tick < frame_end) {
+            cpu.step();
+
+            if (scheduler.tick >= scheduler.next()) scheduler.handle(bus);
+        }
+    }
+
+    {
+        const scheduler = nds7_group.scheduler;
+
+        const cycles_per_dot = arm7_clock / dot_clock + 1;
+        comptime std.debug.assert(cycles_per_dot == 6);
+
+        const cycles_per_frame = 355 * 263 * cycles_per_dot;
+        const frame_end = scheduler.tick + cycles_per_frame;
+
+        const cpu = nds7_group.cpu;
+        const bus = nds7_group.bus;
 
         while (scheduler.tick < frame_end) {
             cpu.step();

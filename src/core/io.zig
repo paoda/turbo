@@ -22,21 +22,8 @@ pub const Io = struct {
     /// Caller must cast the `u32` to either `nds7.IntRequest` or `nds9.IntRequest`
     irq: u32 = 0x0000_0000,
 
-    /// IPC Synchronize
-    /// Read/Write
-    ipc_sync: IpcSync = .{ .raw = 0x0000_0000 },
-
-    /// IPC Fifo Control
-    /// Read/Write
-    ipc_fifo_cnt: IpcFifoCnt = .{ .raw = 0x0000_0000 },
-
-    /// IPC Send FIFO
-    /// Write-Only
-    ipc_fifo_send: u32 = 0x0000_0000,
-
-    /// IPC Receive FIFO
-    /// Read-Only
-    ipc_fifo_recv: u32 = 0x0000_0000,
+    /// Inter Process Communication FIFO
+    ipc_fifo: IpcFifo = .{},
 
     /// Post Boot Flag
     /// Read/Write
@@ -121,6 +108,54 @@ pub inline fn writeToAddressOffset(
     };
 }
 
+const IpcFifo = struct {
+    const Sync = IpcSync;
+    const Control = IpcFifoCnt;
+
+    /// IPC Synchronize
+    /// Read/Write
+    sync: Sync = .{ .raw = 0x0000_0000 },
+
+    /// IPC Fifo Control
+    /// Read/Write
+    cnt: Control = .{ .raw = 0x0000_0000 },
+
+    fifo: [2]Fifo = .{ Fifo{}, Fifo{} },
+
+    const Source = enum { arm7, arm9 };
+
+    /// IPC Send FIFO
+    /// Write-Only
+    pub fn send(self: *@This(), comptime src: Source, value: u32) !void {
+        const idx = switch (src) {
+            .arm7 => 0,
+            .arm9 => 1,
+        };
+
+        if (!self.cnt.enable_fifos.read()) return;
+
+        try self.fifo[idx].push(value);
+    }
+
+    /// IPC Receive FIFO
+    /// Read-Only
+    pub fn recv(self: *@This(), comptime src: Source) u32 {
+        const idx = switch (src) {
+            .arm7 => 1, // switched around on purpose
+            .arm9 => 0,
+        };
+
+        const enabled = self.cnt.enable_fifos.read();
+        const val_opt = if (enabled) self.fifo[idx].pop() else self.fifo[idx].peek();
+
+        return val_opt orelse blk: {
+            self.cnt.send_fifo_empty.set();
+
+            break :blk 0x0000_0000;
+        };
+    }
+};
+
 const IpcSync = extern union {
     /// Data input to IPCSYNC Bit 8->11 of remote CPU
     /// Read-Only
@@ -186,4 +221,65 @@ pub const nds9 = struct {
     pub const IntRequest = IntEnable;
 
     pub const PostFlag = enum(u8) { in_progress = 0, completed };
+};
+
+const Fifo = struct {
+    const Index = u8;
+    const Error = error{full};
+    const len = 0x10;
+
+    read_idx: Index = 0,
+    write_idx: Index = 0,
+
+    buf: [len]u32 = [_]u32{undefined} ** len,
+
+    comptime {
+        const max_capacity = (@as(Index, 1) << @typeInfo(Index).Int.bits - 1) - 1; // half the range of index type
+
+        std.debug.assert(std.math.isPowerOfTwo(len));
+        std.debug.assert(len <= max_capacity);
+    }
+
+    pub fn reset(self: *@This()) void {
+        self.read_idx = 0;
+        self.write_idx = 0;
+    }
+
+    pub fn push(self: *@This(), value: u32) Error!void {
+        if (self.isFull()) return Error.full;
+        defer self.write_idx += 1;
+
+        self.buf[self.mask(self.write_idx)] = value;
+    }
+
+    pub fn pop(self: *@This()) ?u32 {
+        if (self.isEmpty()) return null;
+        defer self.read_idx += 1;
+
+        return self.buf[self.mask(self.read_idx)];
+    }
+
+    pub fn peek(self: *const @This()) ?u32 {
+        if (self.isEmpty()) return null;
+
+        return self.buf[self.mask(self.read_idx)];
+    }
+
+    fn _len(self: *const @This()) Index {
+        return self.write_idx - self.read_idx;
+    }
+
+    fn isFull(self: *const @This()) bool {
+        return self._len() == self.buf.len;
+    }
+
+    fn isEmpty(self: *const @This()) bool {
+        return self.read_idx == self.write_idx;
+    }
+
+    inline fn mask(self: *const @This(), idx: Index) Index {
+        const _mask: Index = @intCast(self.buf.len - 1);
+
+        return idx & _mask;
+    }
 };
