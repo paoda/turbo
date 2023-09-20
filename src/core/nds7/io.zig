@@ -5,8 +5,7 @@ const Bit = @import("bitfield").Bit;
 
 const Bus = @import("Bus.zig");
 const SharedIo = @import("../io.zig").Io;
-const writeToAddressOffset = @import("../io.zig").writeToAddressOffset;
-const valueAtAddressOffset = @import("../io.zig").valueAtAddressOffset;
+const masks = @import("../io.zig").masks;
 
 const log = std.log.scoped(.nds7_io);
 
@@ -51,13 +50,8 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
         u16 => switch (address) {
-            0x0400_0180 => bus.io.shared.ipc_fifo.sync.raw = blk: {
-                const ret = value & ~@as(u16, 0xF) | (bus.io.shared.ipc_fifo.sync.raw & 0xF);
-                log.debug("IPCFIFOSYNC <- 0x{X:0>8}", .{ret});
-
-                break :blk ret;
-            },
-            0x0400_0184 => bus.io.shared.ipc_fifo.cnt.raw = value,
+            0x0400_0180 => bus.io.shared.ipc_fifo.sync.raw = masks.ipcFifoSync(bus, value),
+            0x0400_0184 => bus.io.shared.ipc_fifo.cnt.raw = masks.ipcFifoCnt(bus, value),
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
         u8 => switch (address) {

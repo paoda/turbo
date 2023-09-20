@@ -204,6 +204,33 @@ const IpcFifoCnt = extern union {
     raw: u32,
 };
 
+pub const masks = struct {
+    const Bus9 = @import("nds9/Bus.zig");
+    const Bus7 = @import("nds7/Bus.zig");
+
+    pub inline fn ipcFifoSync(bus: anytype, value: anytype) @TypeOf(value) {
+        comptime verifyBusType(@TypeOf(bus));
+        const T = @TypeOf(value);
+        const mask: T = 0xF;
+
+        return value & ~mask | @as(T, @intCast(bus.io.shared.ipc_fifo.sync.raw & mask));
+    }
+
+    pub inline fn ipcFifoCnt(bus: anytype, value: anytype) @TypeOf(value) {
+        comptime verifyBusType(@TypeOf(bus));
+        const T = @TypeOf(value);
+        const mask: T = 0x0303;
+
+        return value & ~mask | @as(T, @intCast(bus.io.shared.ipc_fifo.cnt.raw & mask));
+    }
+
+    fn verifyBusType(comptime BusT: type) void {
+        std.debug.assert(@typeInfo(BusT) == .Pointer);
+        std.debug.assert(@typeInfo(BusT).Pointer.size == .One);
+        std.debug.assert(@typeInfo(BusT).Pointer.child == Bus9 or @typeInfo(BusT).Pointer.child == Bus7);
+    }
+};
+
 pub const nds7 = struct {
     pub const IntEnable = extern union {
         raw: u32,
