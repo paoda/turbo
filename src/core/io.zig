@@ -211,17 +211,22 @@ pub const masks = struct {
     pub inline fn ipcFifoSync(bus: anytype, value: anytype) @TypeOf(value) {
         comptime verifyBusType(@TypeOf(bus));
         const T = @TypeOf(value);
-        const mask: T = 0xF;
+        const _mask: T = 0xF;
 
-        return value & ~mask | @as(T, @intCast(bus.io.shared.ipc_fifo.sync.raw & mask));
+        return value & ~_mask | @as(T, @intCast(bus.io.shared.ipc_fifo.sync.raw & _mask));
     }
 
     pub inline fn ipcFifoCnt(bus: anytype, value: anytype) @TypeOf(value) {
         comptime verifyBusType(@TypeOf(bus));
         const T = @TypeOf(value);
-        const mask: T = 0x0303;
+        const _mask: T = 0x0303;
 
-        return value & ~mask | @as(T, @intCast(bus.io.shared.ipc_fifo.cnt.raw & mask));
+        return value & ~_mask | @as(T, @intCast(bus.io.shared.ipc_fifo.cnt.raw & _mask));
+    }
+
+    /// General Mask helper
+    pub inline fn mask(original: anytype, value: @TypeOf(original), _mask: @TypeOf(original)) @TypeOf(original) {
+        return (value & _mask) | (original & ~_mask);
     }
 
     fn verifyBusType(comptime BusT: type) void {

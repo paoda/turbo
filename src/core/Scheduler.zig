@@ -20,6 +20,15 @@ pub fn push(self: *@This(), kind: Event.Kind, offset: u64) void {
     self.queue.add(.{ .kind = kind, .tick = self.tick + offset }) catch unreachable;
 }
 
+pub fn remove(self: *@This(), needle: Event.Kind) void {
+    for (self.queue.items, 0..) |event, i| {
+        if (!std.meta.eql(event.kind, needle)) continue;
+
+        _ = self.queue.removeIndex(i); // note: invalidates self.queue.items
+        return;
+    }
+}
+
 pub fn deinit(self: @This()) void {
     self.queue.deinit();
 }
@@ -58,6 +67,8 @@ pub fn handle(self: *@This(), bus_ptr: ?*anyopaque, event: Event, late: u64) voi
                 },
                 .hblank => bus.ppu.onHblankEnd(self, late),
                 .vblank => bus.ppu.onHblankEnd(self, late),
+                .sqrt => bus.io.sqrt.onSqrtCalc(),
+                .div => bus.io.div.onDivCalc(),
             }
         },
     }
@@ -68,7 +79,7 @@ pub const Event = struct {
     kind: Kind,
 
     const Kind7 = enum {};
-    const Kind9 = enum { draw, hblank, vblank };
+    const Kind9 = enum { draw, hblank, vblank, sqrt, div };
 
     pub const Kind = union(enum) {
         nds7: Kind7,
