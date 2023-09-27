@@ -1,7 +1,7 @@
 const std = @import("std");
 const io = @import("io.zig");
 
-const Scheduler = @import("Scheduler.zig");
+const Scheduler = @import("../Scheduler.zig");
 const SharedIo = @import("../io.zig").Io;
 const SharedContext = @import("../emu.zig").SharedContext;
 const forceAlign = @import("../emu.zig").forceAlign;

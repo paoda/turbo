@@ -3,14 +3,13 @@ const SDL = @import("sdl2");
 const gl = @import("gl");
 const zgui = @import("zgui");
 
-const nds9 = @import("core/nds9.zig");
-const nds7 = @import("core/nds7.zig");
-
 const ppu = @import("core/ppu.zig");
 const imgui = @import("ui/imgui.zig");
 const emu = @import("core/emu.zig");
 
+const System = @import("core/emu.zig").System;
 const KeyInput = @import("core/nds9/io.zig").KeyInput;
+const Scheduler = @import("core/Scheduler.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -86,14 +85,14 @@ pub const Ui = struct {
         return SDL.SDL_GL_GetProcAddress(proc.ptr);
     }
 
-    pub fn run(self: *Self, nds7_group: nds7.Group, nds9_group: nds9.Group) !void {
+    pub fn run(self: *Self, scheduler: *Scheduler, system: System) !void {
         // TODO: Sort this out please
 
         const vao_id = opengl_impl.vao();
         defer gl.deleteVertexArrays(1, &[_]GLuint{vao_id});
 
-        const top_tex = opengl_impl.screenTex(nds9_group.bus.ppu.fb.top(.front));
-        const btm_tex = opengl_impl.screenTex(nds9_group.bus.ppu.fb.btm(.front));
+        const top_tex = opengl_impl.screenTex(system.bus9.ppu.fb.top(.front));
+        const btm_tex = opengl_impl.screenTex(system.bus9.ppu.fb.btm(.front));
         const top_out_tex = opengl_impl.outTex();
         const btm_out_tex = opengl_impl.outTex();
         defer gl.deleteTextures(4, &[_]GLuint{ top_tex, top_out_tex, btm_tex, btm_out_tex });
@@ -108,7 +107,7 @@ pub const Ui = struct {
         var event: SDL.SDL_Event = undefined;
 
         emu_loop: while (true) {
-            emu.runFrame(nds7_group, nds9_group);
+            emu.runFrame(scheduler, system);
 
             while (SDL.SDL_PollEvent(&event) != 0) {
                 _ = zgui.backend.processEvent(&event);
@@ -142,7 +141,7 @@ pub const Ui = struct {
                             else => {},
                         }
 
-                        nds9_group.bus.io.keyinput.fetchAnd(~keyinput.raw, .Monotonic);
+                        system.bus9.io.keyinput.fetchAnd(~keyinput.raw, .Monotonic);
                     },
                     SDL.SDL_KEYUP => {
                         // TODO: Make use of compare_and_xor?
@@ -163,7 +162,7 @@ pub const Ui = struct {
                             else => {},
                         }
 
-                        nds9_group.bus.io.keyinput.fetchOr(keyinput.raw, .Monotonic);
+                        system.bus9.io.keyinput.fetchOr(keyinput.raw, .Monotonic);
                     },
                     else => {},
                 }
@@ -174,7 +173,7 @@ pub const Ui = struct {
                 defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
                 gl.viewport(0, 0, nds_width, nds_height);
-                opengl_impl.drawScreen(top_tex, prog_id, vao_id, nds9_group.bus.ppu.fb.top(.front));
+                opengl_impl.drawScreen(top_tex, prog_id, vao_id, system.bus9.ppu.fb.top(.front));
             }
 
             {
@@ -182,10 +181,10 @@ pub const Ui = struct {
                 defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
                 gl.viewport(0, 0, nds_width, nds_height);
-                opengl_impl.drawScreen(btm_tex, prog_id, vao_id, nds9_group.bus.ppu.fb.btm(.front));
+                opengl_impl.drawScreen(btm_tex, prog_id, vao_id, system.bus9.ppu.fb.btm(.front));
             }
 
-            const zgui_redraw = imgui.draw(&self.state, top_out_tex, btm_out_tex, nds9_group.cpu);
+            const zgui_redraw = imgui.draw(&self.state, top_out_tex, btm_out_tex, system);
 
             if (zgui_redraw) {
                 // Background Colour

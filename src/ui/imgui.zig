@@ -3,7 +3,7 @@ const zgui = @import("zgui");
 
 const platform = @import("../platform.zig");
 
-const Arm946es = @import("../core/nds9.zig").Arm946es;
+const System = @import("../core/emu.zig").System;
 const Dimensions = platform.Dimensions;
 
 const nds_height = @import("../core/ppu.zig").screen_height;
@@ -18,8 +18,9 @@ pub const State = struct {
     dim: Dimensions = .{ .width = 1600, .height = 900 },
 };
 
-pub fn draw(state: *const State, top_tex: GLuint, btm_tex: GLuint, arm946es: *Arm946es) bool {
-    _ = arm946es;
+pub fn draw(state: *const State, top_tex: GLuint, btm_tex: GLuint, system: System) bool {
+    _ = system;
+
     zgui.backend.newFrame(@floatFromInt(state.dim.width), @floatFromInt(state.dim.height));
 
     {

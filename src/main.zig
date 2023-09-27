@@ -1,16 +1,12 @@
 const std = @import("std");
 const clap = @import("zig-clap");
 
-const nds9 = @import("core/nds9.zig");
-const nds7 = @import("core/nds7.zig");
 const emu = @import("core/emu.zig");
-
-const IBus = @import("arm32").Bus;
-const IScheduler = @import("arm32").Scheduler;
-const ICoprocessor = @import("arm32").Coprocessor;
 
 const Ui = @import("platform.zig").Ui;
 const SharedContext = @import("core/emu.zig").SharedContext;
+const System = @import("core/emu.zig").System;
+const Scheduler = @import("core/Scheduler.zig");
 
 const Allocator = std.mem.Allocator;
 const ClapResult = clap.Result(clap.Help, &cli_params, clap.parsers.default);
@@ -41,33 +37,32 @@ pub fn main() !void {
     const shared_ctx = try SharedContext.init(allocator);
     defer shared_ctx.deinit(allocator);
 
-    const nds9_group: nds9.Group = blk: {
-        var scheduler = try nds9.Scheduler.init(allocator);
-        var bus = try nds9.Bus.init(allocator, &scheduler, shared_ctx);
-        var cp15 = nds9.Cp15{};
+    var scheduler = try Scheduler.init(allocator);
+    defer scheduler.deinit();
 
-        var arm946es = nds9.Arm946es.init(IScheduler.init(&scheduler), IBus.init(&bus), ICoprocessor.init(&cp15));
+    const system: System = blk: {
+        const IBus = @import("arm32").Bus;
+        const IScheduler = @import("arm32").Scheduler;
+        const ICoprocessor = @import("arm32").Coprocessor;
 
-        break :blk .{ .cpu = &arm946es, .bus = &bus, .scheduler = &scheduler };
+        var cp15 = System.Cp15{};
+
+        var bus7 = try System.Bus7.init(allocator, &scheduler, shared_ctx);
+        var bus9 = try System.Bus9.init(allocator, &scheduler, shared_ctx);
+
+        var arm7tdmi = System.Arm7tdmi.init(IScheduler.init(&scheduler), IBus.init(&bus7));
+        var arm946es = System.Arm946es.init(IScheduler.init(&scheduler), IBus.init(&bus9), ICoprocessor.init(&cp15));
+
+        break :blk .{ .arm7tdmi = &arm7tdmi, .arm946es = &arm946es, .bus7 = &bus7, .bus9 = &bus9, .cp15 = &cp15 };
     };
-    defer nds9_group.deinit(allocator);
-
-    const nds7_group: nds7.Group = blk: {
-        var scheduler = try nds7.Scheduler.init(allocator);
-        var bus = try nds7.Bus.init(allocator, &scheduler, shared_ctx);
-        var arm7tdmi = nds7.Arm7tdmi.init(IScheduler.init(&scheduler), IBus.init(&bus));
-
-        break :blk .{ .cpu = &arm7tdmi, .bus = &bus, .scheduler = &scheduler };
-    };
-    defer nds7_group.deinit(allocator);
-
-    const rom_title = try emu.load(allocator, nds7_group, nds9_group, rom_file);
+    defer system.deinit(allocator);
+    const rom_title = try emu.load(allocator, system, rom_file);
 
     var ui = try Ui.init(allocator);
     defer ui.deinit(allocator);
 
     ui.setTitle(rom_title);
-    try ui.run(nds7_group, nds9_group);
+    try ui.run(&scheduler, system);
 }
 
 fn handlePositional(result: ClapResult) ![]const u8 {

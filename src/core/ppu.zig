@@ -1,7 +1,8 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-const nds9 = @import("nds9.zig");
+const Scheduler = @import("Scheduler.zig");
+const System = @import("emu.zig").System;
 
 pub const screen_width = 256;
 pub const screen_height = 192;
@@ -14,16 +15,14 @@ pub const Ppu = struct {
     io: io = .{},
 
     pub fn init(allocator: Allocator) !@This() {
-        return .{
-            .fb = try FrameBuffer.init(allocator),
-        };
+        return .{ .fb = try FrameBuffer.init(allocator) };
     }
 
     pub fn deinit(self: @This(), allocator: Allocator) void {
         self.fb.deinit(allocator);
     }
 
-    pub fn drawScanline(self: *@This(), nds9_bus: *nds9.Bus) void {
+    pub fn drawScanline(self: *@This(), bus: *System.Bus9) void {
         const bg_mode = self.io.dispcnt_a.display_mode.read();
         const scanline = self.io.vcount.scanline.read();
 
@@ -45,7 +44,7 @@ pub const Ppu = struct {
 
                     for (scanline_ptr, 0..) |*rgba, i| {
                         const addr = base_addr + @as(u32, @intCast(i)) * @sizeOf(u16);
-                        rgba.* = rgba888(nds9_bus.dbgRead(u16, addr));
+                        rgba.* = rgba888(bus.dbgRead(u16, addr));
                     }
                 }
             },
@@ -54,7 +53,7 @@ pub const Ppu = struct {
     }
 
     /// HDraw -> HBlank
-    pub fn onHdrawEnd(self: *@This(), nds9_scheduler: *nds9.Scheduler, late: u64) void {
+    pub fn onHdrawEnd(self: *@This(), scheduler: *Scheduler, late: u64) void {
         const dots_in_hblank = 99;
         std.debug.assert(self.io.dispstat.hblank.read() == false);
         std.debug.assert(self.io.dispstat.vblank.read() == false);
@@ -62,10 +61,10 @@ pub const Ppu = struct {
         // TODO: Signal HBlank IRQ
 
         self.io.dispstat.hblank.set();
-        nds9_scheduler.push(.hblank, dots_in_hblank * cycles_per_dot -| late);
+        scheduler.push(.{ .nds9 = .hblank }, dots_in_hblank * cycles_per_dot -| late);
     }
 
-    pub fn onHblankEnd(self: *@This(), nds9_scheduler: *nds9.Scheduler, late: u64) void {
+    pub fn onHblankEnd(self: *@This(), scheduler: *Scheduler, late: u64) void {
         const scanline_count = 192 + 71;
 
         const prev_scanline = self.io.vcount.scanline.read();
@@ -85,7 +84,7 @@ pub const Ppu = struct {
 
             // Draw Another Scanline
             const dots_in_hdraw = 256;
-            return nds9_scheduler.push(.draw, dots_in_hdraw * cycles_per_dot -| late);
+            return scheduler.push(.{ .nds9 = .draw }, dots_in_hdraw * cycles_per_dot -| late);
         }
 
         if (scanline == 192) {
@@ -100,7 +99,7 @@ pub const Ppu = struct {
         std.debug.assert(self.io.dispstat.vblank.read() == (scanline != 262));
 
         const dots_in_scanline = 256 + 99;
-        nds9_scheduler.push(.hblank, dots_in_scanline * cycles_per_dot -| late);
+        scheduler.push(.{ .nds9 = .hblank }, dots_in_scanline * cycles_per_dot -| late);
     }
 };
 

@@ -2,7 +2,7 @@ const std = @import("std");
 const io = @import("io.zig");
 
 const Ppu = @import("../ppu.zig").Ppu;
-const Scheduler = @import("Scheduler.zig");
+const Scheduler = @import("../Scheduler.zig");
 const SharedContext = @import("../emu.zig").SharedContext;
 const forceAlign = @import("../emu.zig").forceAlign;
 
@@ -27,7 +27,7 @@ pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_ctx: SharedConte
     @memset(vram1_mem, 0);
 
     const dots_per_cycle = 3; // ARM946E-S runs twice as fast as the ARM7TDMI
-    scheduler.push(.draw, 256 * dots_per_cycle);
+    scheduler.push(.{ .nds9 = .draw }, 256 * dots_per_cycle);
 
     return .{
         .main = shared_ctx.main,
