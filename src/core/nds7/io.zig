@@ -33,6 +33,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u8 => switch (address) {
+            0x0400_0241 => bus.io.shared.wramcnt.raw,
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         else => @compileError(T ++ " is an unsupported bus read type"),

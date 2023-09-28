@@ -135,6 +135,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0241 => bus.ppu.io.vramcnt_b.raw = value,
             0x0400_0242 => bus.ppu.io.vramcnt_c.raw = value,
             0x0400_0243 => bus.ppu.io.vramcnt_d.raw = value,
+            0x0400_0247 => {
+                bus.io.shared.wramcnt.raw = value;
+                bus.wram.update(bus.io.shared.wramcnt);
+            },
 
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },

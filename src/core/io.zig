@@ -35,6 +35,8 @@ pub const Io = struct {
     /// Caller must cast the `u8` to either `nds7.PostFlg` or `nds9.PostFlg`
     post_flg: u8 = @intFromEnum(nds7.PostFlag.in_progress),
 
+    wramcnt: WramCnt = .{ .raw = 0x00 },
+
     // TODO: DS Cartridge I/O Ports
 };
 
@@ -74,10 +76,30 @@ const IpcFifo = struct {
             .nds7 => {
                 self._nds7.sync.raw = masks.ipcFifoSync(self._nds7.sync.raw, value);
                 self._nds9.sync.raw = masks.mask(self._nds9.sync.raw, (self._nds7.sync.raw >> 8) & 0xF, 0xF);
+
+                if (value >> 3 & 1 == 1) {
+                    self._nds7.fifo.reset();
+
+                    self._nds7.cnt.send_fifo_empty.write(true);
+                    self._nds9.cnt.recv_fifo_empty.write(true);
+
+                    self._nds7.cnt.send_fifo_full.write(false);
+                    self._nds9.cnt.recv_fifo_full.write(false);
+                }
             },
             .nds9 => {
                 self._nds9.sync.raw = masks.ipcFifoSync(self._nds9.sync.raw, value);
                 self._nds7.sync.raw = masks.mask(self._nds7.sync.raw, (self._nds9.sync.raw >> 8) & 0xF, 0xF);
+
+                if (value >> 3 & 1 == 1) {
+                    self._nds9.fifo.reset();
+
+                    self._nds9.cnt.send_fifo_empty.write(true);
+                    self._nds7.cnt.recv_fifo_empty.write(true);
+
+                    self._nds9.cnt.send_fifo_full.write(false);
+                    self._nds7.cnt.recv_fifo_full.write(false);
+                }
             },
         }
     }
@@ -216,6 +238,11 @@ const IpcFifoCnt = extern union {
     enable_fifos: Bit(u32, 15),
 
     raw: u32,
+};
+
+pub const WramCnt = extern union {
+    mode: Bitfield(u8, 0, 2),
+    raw: u8,
 };
 
 pub const masks = struct {

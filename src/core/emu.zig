@@ -92,33 +92,150 @@ pub fn runFrame(scheduler: *Scheduler, system: System) void {
 // FIXME: Perf win to allocating on the stack instead?
 pub const SharedContext = struct {
     const MiB = 0x100000;
+    const KiB = 0x400;
 
     io: *SharedIo,
     main: *[4 * MiB]u8,
+    wram: *Wram,
 
     pub fn init(allocator: Allocator) !@This() {
+        const wram = try allocator.create(Wram);
+        errdefer allocator.destroy(wram);
+
+        try wram.init(allocator);
+
         const ctx = .{
-            .io = try allocator.create(SharedIo),
+            .io = blk: {
+                const io = try allocator.create(SharedIo);
+                io.* = .{};
+
+                break :blk io;
+            },
+            .wram = wram,
             .main = try allocator.create([4 * MiB]u8),
         };
-        ctx.io.* = .{};
 
         return ctx;
     }
 
     pub fn deinit(self: @This(), allocator: Allocator) void {
+        self.wram.deinit(allocator);
+        allocator.destroy(self.wram);
+
         allocator.destroy(self.io);
         allocator.destroy(self.main);
     }
 };
 
+// Before I implement Bus-wide Fastmem, Let's play with some more limited (read: less useful)
+// fastmem implementations
+
+// TODO: move somewhere else ideally
+pub const Wram = struct {
+    const page_size = 1 * KiB; // perhaps too big?
+    const addr_space_size = 0x8000;
+    const table_len = addr_space_size / page_size;
+    const IntFittingRange = std.math.IntFittingRange;
+
+    const io = @import("io.zig");
+    const KiB = 0x400;
+
+    const log = std.log.scoped(.shared_wram);
+
+    _buf: *[32 * KiB]u8,
+
+    nds9_table: *const [table_len]?[*]u8,
+    nds7_table: *const [table_len]?[*]u8,
+
+    pub fn init(self: *@This(), allocator: Allocator) !void {
+        const buf = try allocator.create([32 * KiB]u8);
+        errdefer allocator.destroy(buf);
+
+        const tables = try allocator.alloc(?[*]u8, 2 * table_len);
+        @memset(tables, null);
+
+        self.* = .{
+            .nds9_table = tables[0..table_len],
+            .nds7_table = tables[table_len .. 2 * table_len],
+            ._buf = buf,
+        };
+    }
+
+    pub fn deinit(self: @This(), allocator: Allocator) void {
+        allocator.destroy(self._buf);
+
+        const ptr: [*]?[*]const u8 = @ptrCast(@constCast(self.nds9_table));
+        allocator.free(ptr[0 .. 2 * table_len]);
+    }
+
+    pub fn update(self: *@This(), wramcnt: io.WramCnt) void {
+        const mode = wramcnt.mode.read();
+
+        const nds9_tbl = @constCast(self.nds9_table);
+        const nds7_tbl = @constCast(self.nds7_table);
+
+        for (nds9_tbl, nds7_tbl, 0..) |*nds9_ptr, *nds7_ptr, i| {
+            const addr = i * page_size;
+
+            switch (mode) {
+                0b00 => {
+                    nds9_ptr.* = self._buf[addr..].ptr;
+                    nds7_ptr.* = null;
+                },
+                0b01 => {
+                    nds9_ptr.* = self._buf[0x4000 + (addr & 0x3FFF) ..].ptr;
+                    nds7_ptr.* = self._buf[(addr & 0x3FFF)..].ptr;
+                },
+                0b10 => {
+                    nds9_ptr.* = self._buf[(addr & 0x3FFF)..].ptr;
+                    nds7_ptr.* = self._buf[0x4000 + (addr & 0x3FFF) ..].ptr;
+                },
+                0b11 => {
+                    nds9_ptr.* = null;
+                    nds7_ptr.* = self._buf[addr..].ptr;
+                },
+            }
+        }
+    }
+
+    // TODO: Rename
+    const Device = enum { nds9, nds7 };
+
+    pub fn read(self: @This(), comptime T: type, comptime dev: Device, address: u32) T {
+        const bits = @typeInfo(IntFittingRange(0, page_size - 1)).Int.bits;
+        const page = address >> bits;
+        const offset = address & (page_size - 1);
+        const table = if (dev == .nds9) self.nds9_table else self.nds7_table;
+
+        if (table[page]) |some_ptr| {
+            const ptr: [*]align(1) const T = @ptrCast(@alignCast(some_ptr));
+
+            return ptr[offset / @sizeOf(T)];
+        }
+
+        log.err("{s}: read(T: {}, addr: 0x{X:0>8}) was in un-mapped WRAM space", .{ @tagName(dev), T, 0x0300_0000 + address });
+        return 0x00;
+    }
+
+    pub fn write(self: *@This(), comptime T: type, comptime dev: Device, address: u32, value: T) void {
+        const bits = @typeInfo(IntFittingRange(0, page_size - 1)).Int.bits;
+        const page = address >> bits;
+        const offset = address & (page_size - 1);
+        const table = if (dev == .nds9) self.nds9_table else self.nds7_table;
+
+        if (table[page]) |some_ptr| {
+            const ptr: [*]align(1) T = @ptrCast(@alignCast(some_ptr));
+            ptr[offset / @sizeOf(T)] = value;
+
+            return;
+        }
+
+        log.err("{s}: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8}) was in un-mapped WRAM space", .{ @tagName(dev), T, 0x0300_0000 + address, value });
+    }
+};
+
 pub inline fn forceAlign(comptime T: type, address: u32) u32 {
-    return switch (T) {
-        u32 => address & ~@as(u32, 3),
-        u16 => address & ~@as(u32, 1),
-        u8 => address,
-        else => @compileError("Bus: Invalid read/write type"),
-    };
+    return address & ~@as(u32, @sizeOf(T) - 1);
 }
 
 pub const System = struct {
