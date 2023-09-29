@@ -5,6 +5,10 @@ const Bit = @import("bitfield").Bit;
 
 const log = std.log.scoped(.shared_io);
 
+// FIXME: This whole thing is bad bad bad bad bad
+// I think only the IPC stuff needs to be here, since they talk to each other.
+// every other "shared I/O register" is just duplicated on both CPUs. So they shouldn't be here
+
 pub const Io = struct {
     /// Interrupt Master Enable
     /// Read/Write
@@ -39,120 +43,130 @@ fn warn(comptime format: []const u8, args: anytype) u0 {
     return 0;
 }
 
-// TODO: Please Rename
-// TODO: Figure out a way to apply masks while calling valueAtAddressOffset
-// TODO: These aren't optimized well. Can we improve that?
-pub inline fn valueAtAddressOffset(comptime T: type, address: u32, value: T) u8 {
-    const L2I = std.math.Log2Int(T);
-
-    return @truncate(switch (T) {
-        u16 => value >> @as(L2I, @truncate((address & 1) << 3)),
-        u32 => value >> @as(L2I, @truncate((address & 3) << 3)),
-        else => @compileError("unsupported for " ++ @typeName(T) ++ "values"),
-    });
-}
-
-fn WriteOption(comptime T: type) type {
-    return struct { mask: ?T = null };
-}
-
-// TODO: also please rename
-// TODO: Figure out a way to apply masks while calling writeToAddressOffset
-// TODO: These aren't optimized well. Can we improve that?
-pub inline fn writeToAddressOffset(
-    register: anytype,
-    address: u32,
-    value: anytype,
-    // mask: WriteOption(@typeInfo(@TypeOf(register)).Pointer.child),
-) void {
-    const Ptr = @TypeOf(register);
-    const ChildT = @typeInfo(Ptr).Pointer.child;
-    const ValueT = @TypeOf(value);
-
-    const left = register.*;
-
-    register.* = switch (ChildT) {
-        u32 => switch (ValueT) {
-            u16 => blk: {
-                // TODO: This probably gets deleted
-                const offset: u1 = @truncate(address >> 1);
-
-                break :blk switch (offset) {
-                    0b0 => (left & 0xFFFF_0000) | value,
-                    0b1 => (left & 0x0000_FFFF) | @as(u32, value) << 16,
-                };
-            },
-            u8 => blk: {
-                // TODO: Remove branching
-                const offset: u2 = @truncate(address);
-
-                break :blk switch (offset) {
-                    0b00 => (left & 0xFFFF_FF00) | value,
-                    0b01 => (left & 0xFFFF_00FF) | @as(u32, value) << 8,
-                    0b10 => (left & 0xFF00_FFFF) | @as(u32, value) << 16,
-                    0b11 => (left & 0x00FF_FFFF) | @as(u32, value) << 24,
-                };
-            },
-            else => @compileError("for " ++ @typeName(Ptr) ++ ", T must be u16 or u8"),
-        },
-        u16 => blk: {
-            if (ValueT != u8) @compileError("for " ++ @typeName(Ptr) ++ ", T must be u8");
-
-            const shamt = @as(u4, @truncate(address & 1)) << 3;
-            const mask: u16 = 0xFF00 >> shamt;
-            const value_shifted = @as(u16, value) << shamt;
-
-            break :blk (left & mask) | value_shifted;
-        },
-        else => @compileError("unsupported for " ++ @typeName(Ptr) ++ " values"),
-    };
-}
-
 const IpcFifo = struct {
     const Sync = IpcSync;
     const Control = IpcFifoCnt;
 
-    /// IPC Synchronize
+    _nds7: Impl = .{},
+    _nds9: Impl = .{},
+
+    const Source = enum { nds7, nds9 };
+
+    const Impl = struct {
+        /// IPC Synchronize
+        /// Read/Write
+        sync: Sync = .{ .raw = 0x0000_0000 },
+
+        /// IPC Fifo Control
+        /// Read/Write
+        cnt: Control = .{ .raw = 0x0000_0101 },
+
+        fifo: Fifo = Fifo{},
+
+        /// Latch containing thel last read value from a FIFO
+        last_read: ?u32 = null,
+    };
+
+    /// IPCSYNC
     /// Read/Write
-    sync: Sync = .{ .raw = 0x0000_0000 },
+    pub fn setIpcSync(self: *@This(), comptime src: Source, value: anytype) void {
+        switch (src) {
+            .nds7 => {
+                self._nds7.sync.raw = masks.ipcFifoSync(self._nds7.sync.raw, value);
+                self._nds9.sync.raw = masks.mask(self._nds9.sync.raw, (self._nds7.sync.raw >> 8) & 0xF, 0xF);
+            },
+            .nds9 => {
+                self._nds9.sync.raw = masks.ipcFifoSync(self._nds9.sync.raw, value);
+                self._nds7.sync.raw = masks.mask(self._nds7.sync.raw, (self._nds9.sync.raw >> 8) & 0xF, 0xF);
+            },
+        }
+    }
 
-    /// IPC Fifo Control
+    /// IPCFIFOCNT
     /// Read/Write
-    cnt: Control = .{ .raw = 0x0000_0000 },
-
-    fifo: [2]Fifo = .{ Fifo{}, Fifo{} },
-
-    const Source = enum { arm7, arm9 };
+    pub fn setIpcFifoCnt(self: *@This(), comptime src: Source, value: anytype) void {
+        switch (src) {
+            .nds7 => self._nds7.cnt.raw = masks.ipcFifoCnt(self._nds7.cnt.raw, value),
+            .nds9 => self._nds9.cnt.raw = masks.ipcFifoCnt(self._nds9.cnt.raw, value),
+        }
+    }
 
     /// IPC Send FIFO
     /// Write-Only
     pub fn send(self: *@This(), comptime src: Source, value: u32) !void {
-        const idx = switch (src) {
-            .arm7 => 0,
-            .arm9 => 1,
-        };
+        switch (src) {
+            .nds7 => {
+                if (!self._nds7.cnt.enable_fifos.read()) return;
+                try self._nds7.fifo.push(value);
 
-        if (!self.cnt.enable_fifos.read()) return;
+                // update status bits
+                self._nds7.cnt.send_fifo_empty.write(self._nds7.fifo._len() == 0);
+                self._nds9.cnt.recv_fifo_empty.write(self._nds7.fifo._len() == 0);
 
-        try self.fifo[idx].push(value);
+                self._nds7.cnt.send_fifo_full.write(self._nds7.fifo._len() == 0x10);
+                self._nds9.cnt.recv_fifo_full.write(self._nds7.fifo._len() == 0x10);
+            },
+            .nds9 => {
+                if (!self._nds9.cnt.enable_fifos.read()) return;
+                try self._nds9.fifo.push(value);
+
+                // update status bits
+                self._nds9.cnt.send_fifo_empty.write(self._nds9.fifo._len() == 0);
+                self._nds7.cnt.recv_fifo_empty.write(self._nds9.fifo._len() == 0);
+
+                self._nds9.cnt.send_fifo_full.write(self._nds9.fifo._len() == 0x10);
+                self._nds7.cnt.recv_fifo_full.write(self._nds9.fifo._len() == 0x10);
+            },
+        }
     }
 
     /// IPC Receive FIFO
     /// Read-Only
     pub fn recv(self: *@This(), comptime src: Source) u32 {
-        const idx = switch (src) {
-            .arm7 => 1, // switched around on purpose
-            .arm9 => 0,
-        };
+        switch (src) {
+            .nds7 => {
+                const enabled = self._nds7.cnt.enable_fifos.read();
+                const val_opt = if (enabled) self._nds9.fifo.pop() else self._nds9.fifo.peek();
 
-        const enabled = self.cnt.enable_fifos.read();
-        const val_opt = if (enabled) self.fifo[idx].pop() else self.fifo[idx].peek();
+                const value = if (val_opt) |val| blk: {
+                    self._nds9.last_read = val;
+                    break :blk val;
+                } else blk: {
+                    self._nds7.cnt.fifo_error.set();
+                    break :blk self._nds7.last_read orelse 0x0000_0000;
+                };
 
-        return val_opt orelse blk: {
-            self.cnt.send_fifo_empty.set();
+                // update status bits
+                self._nds7.cnt.recv_fifo_empty.write(self._nds9.fifo._len() == 0);
+                self._nds9.cnt.send_fifo_empty.write(self._nds9.fifo._len() == 0);
 
-            break :blk 0x0000_0000;
-        };
+                self._nds7.cnt.recv_fifo_full.write(self._nds9.fifo._len() == 0x10);
+                self._nds9.cnt.send_fifo_full.write(self._nds9.fifo._len() == 0x10);
+
+                return value;
+            },
+            .nds9 => {
+                const enabled = self._nds9.cnt.enable_fifos.read();
+                const val_opt = if (enabled) self._nds7.fifo.pop() else self._nds7.fifo.peek();
+
+                const value = if (val_opt) |val| blk: {
+                    self._nds7.last_read = val;
+                    break :blk val;
+                } else blk: {
+                    self._nds9.cnt.fifo_error.set();
+                    break :blk self._nds7.last_read orelse 0x0000_0000;
+                };
+
+                // update status bits
+                self._nds9.cnt.recv_fifo_empty.write(self._nds7.fifo._len() == 0);
+                self._nds7.cnt.send_fifo_empty.write(self._nds7.fifo._len() == 0);
+
+                self._nds9.cnt.recv_fifo_full.write(self._nds7.fifo._len() == 0x10);
+                self._nds7.cnt.send_fifo_full.write(self._nds7.fifo._len() == 0x10);
+
+                return value;
+            },
+        }
     }
 };
 
@@ -208,31 +222,25 @@ pub const masks = struct {
     const Bus9 = @import("nds9/Bus.zig");
     const Bus7 = @import("nds7/Bus.zig");
 
-    pub inline fn ipcFifoSync(bus: anytype, value: anytype) @TypeOf(value) {
-        comptime verifyBusType(@TypeOf(bus));
-        const T = @TypeOf(value);
-        const _mask: T = 0xF;
-
-        return value & ~_mask | @as(T, @intCast(bus.io.shared.ipc_fifo.sync.raw & _mask));
+    inline fn ipcFifoSync(sync: u32, value: anytype) u32 {
+        const _mask: u32 = 0x6F00;
+        return (@as(u32, value) & _mask) | (sync & ~_mask);
     }
 
-    pub inline fn ipcFifoCnt(bus: anytype, value: anytype) @TypeOf(value) {
-        comptime verifyBusType(@TypeOf(bus));
-        const T = @TypeOf(value);
-        const _mask: T = 0x0303;
+    inline fn ipcFifoCnt(cnt: u32, value: anytype) u32 {
+        const _mask: u32 = 0xC40C;
+        const err_mask: u32 = 0x4000; // bit 14
 
-        return value & ~_mask | @as(T, @intCast(bus.io.shared.ipc_fifo.cnt.raw & _mask));
+        const err_bit = (cnt & err_mask) & ~(value & err_mask);
+        if (value & 0b1000 != 0) log.err("TODO: handle IPCFIFOCNT.3", .{});
+
+        const without_err = (@as(u32, value) & _mask) | (cnt & ~_mask);
+        return (without_err & ~err_mask) | err_bit;
     }
 
     /// General Mask helper
     pub inline fn mask(original: anytype, value: @TypeOf(original), _mask: @TypeOf(original)) @TypeOf(original) {
         return (value & _mask) | (original & ~_mask);
-    }
-
-    fn verifyBusType(comptime BusT: type) void {
-        std.debug.assert(@typeInfo(BusT) == .Pointer);
-        std.debug.assert(@typeInfo(BusT).Pointer.size == .One);
-        std.debug.assert(@typeInfo(BusT).Pointer.child == Bus9 or @typeInfo(BusT).Pointer.child == Bus7);
     }
 };
 

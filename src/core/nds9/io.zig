@@ -43,15 +43,15 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_02AC => @truncate(bus.io.div.remainder >> 32),
             0x0400_02B4 => @truncate(bus.io.sqrt.result),
 
-            0x0410_0000 => bus.io.shared.ipc_fifo.recv(.arm9),
+            0x0410_0000 => bus.io.shared.ipc_fifo.recv(.nds9),
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u16 => switch (address) {
             0x0400_0004 => bus.ppu.io.dispstat.raw,
             0x0400_0130 => bus.io.keyinput.load(.Monotonic),
 
-            0x0400_0180 => @truncate(bus.io.shared.ipc_fifo.sync.raw),
-            0x0400_0184 => @truncate(bus.io.shared.ipc_fifo.cnt.raw),
+            0x0400_0180 => @truncate(bus.io.shared.ipc_fifo._nds9.sync.raw),
+            0x0400_0184 => @truncate(bus.io.shared.ipc_fifo._nds9.cnt.raw),
 
             0x0400_0280 => @truncate(bus.io.div.cnt.raw),
             0x0400_02B0 => @truncate(bus.io.sqrt.cnt.raw),
@@ -69,9 +69,9 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
     switch (T) {
         u32 => switch (address) {
             0x0400_0000 => bus.ppu.io.dispcnt_a.raw = value,
-            0x0400_0180 => bus.io.shared.ipc_fifo.sync.raw = masks.ipcFifoSync(bus, value),
-            0x0400_0184 => bus.io.shared.ipc_fifo.cnt.raw = masks.ipcFifoCnt(bus, value),
-            0x0400_0188 => bus.io.shared.ipc_fifo.send(.arm9, value) catch |e| std.debug.panic("IPC FIFO Error: {}", .{e}),
+            0x0400_0180 => bus.io.shared.ipc_fifo.setIpcSync(.nds9, value),
+            0x0400_0184 => bus.io.shared.ipc_fifo.setIpcFifoCnt(.nds9, value),
+            0x0400_0188 => bus.io.shared.ipc_fifo.send(.nds9, value) catch |e| std.debug.panic("IPC FIFO Error: {}", .{e}),
 
             0x0400_0240 => {
                 bus.ppu.io.vramcnt_a.raw = @truncate(value >> 0); // 0x0400_0240
@@ -114,8 +114,8 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
         u16 => switch (address) {
-            0x0400_0180 => bus.io.shared.ipc_fifo.sync.raw = masks.ipcFifoSync(bus, value),
-            0x0400_0184 => bus.io.shared.ipc_fifo.cnt.raw = masks.ipcFifoCnt(bus, value),
+            0x0400_0180 => bus.io.shared.ipc_fifo.setIpcSync(.nds9, value),
+            0x0400_0184 => bus.io.shared.ipc_fifo.setIpcFifoCnt(.nds9, value),
             0x0400_0208 => bus.io.shared.ime = value & 1 == 1,
 
             0x0400_0280 => {
