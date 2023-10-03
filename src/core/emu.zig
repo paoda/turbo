@@ -94,15 +94,21 @@ pub const SharedContext = struct {
     const MiB = 0x100000;
     const KiB = 0x400;
 
+    const Vram = @import("ppu.zig").Vram;
+
     io: *SharedIo,
     main: *[4 * MiB]u8,
     wram: *Wram,
+    vram: *Vram,
 
     pub fn init(allocator: Allocator) !@This() {
         const wram = try allocator.create(Wram);
         errdefer allocator.destroy(wram);
-
         try wram.init(allocator);
+
+        const vram = try allocator.create(Vram);
+        errdefer allocator.destroy(vram);
+        try vram.init(allocator);
 
         const ctx = .{
             .io = blk: {
@@ -112,6 +118,7 @@ pub const SharedContext = struct {
                 break :blk io;
             },
             .wram = wram,
+            .vram = vram,
             .main = try allocator.create([4 * MiB]u8),
         };
 
@@ -121,6 +128,9 @@ pub const SharedContext = struct {
     pub fn deinit(self: @This(), allocator: Allocator) void {
         self.wram.deinit(allocator);
         allocator.destroy(self.wram);
+
+        self.vram.deinit(allocator);
+        allocator.destroy(self.vram);
 
         allocator.destroy(self.io);
         allocator.destroy(self.main);
@@ -135,6 +145,8 @@ pub const Wram = struct {
     const page_size = 1 * KiB; // perhaps too big?
     const addr_space_size = 0x8000;
     const table_len = addr_space_size / page_size;
+    const buf_len = 32 * KiB;
+
     const IntFittingRange = std.math.IntFittingRange;
 
     const io = @import("io.zig");
@@ -142,13 +154,13 @@ pub const Wram = struct {
 
     const log = std.log.scoped(.shared_wram);
 
-    _buf: *[32 * KiB]u8,
+    _buf: *[buf_len]u8,
 
     nds9_table: *const [table_len]?[*]u8,
     nds7_table: *const [table_len]?[*]u8,
 
     pub fn init(self: *@This(), allocator: Allocator) !void {
-        const buf = try allocator.create([32 * KiB]u8);
+        const buf = try allocator.create([buf_len]u8);
         errdefer allocator.destroy(buf);
 
         const tables = try allocator.alloc(?[*]u8, 2 * table_len);
@@ -203,12 +215,13 @@ pub const Wram = struct {
 
     pub fn read(self: @This(), comptime T: type, comptime dev: Device, address: u32) T {
         const bits = @typeInfo(IntFittingRange(0, page_size - 1)).Int.bits;
-        const page = address >> bits;
-        const offset = address & (page_size - 1);
+        const masked_addr = address & (addr_space_size - 1);
+        const page = masked_addr >> bits;
+        const offset = masked_addr & (page_size - 1);
         const table = if (dev == .nds9) self.nds9_table else self.nds7_table;
 
         if (table[page]) |some_ptr| {
-            const ptr: [*]align(1) const T = @ptrCast(@alignCast(some_ptr));
+            const ptr: [*]const T = @ptrCast(@alignCast(some_ptr));
 
             return ptr[offset / @sizeOf(T)];
         }
@@ -219,12 +232,13 @@ pub const Wram = struct {
 
     pub fn write(self: *@This(), comptime T: type, comptime dev: Device, address: u32, value: T) void {
         const bits = @typeInfo(IntFittingRange(0, page_size - 1)).Int.bits;
-        const page = address >> bits;
-        const offset = address & (page_size - 1);
+        const masked_addr = address & (addr_space_size - 1);
+        const page = masked_addr >> bits;
+        const offset = masked_addr & (page_size - 1);
         const table = if (dev == .nds9) self.nds9_table else self.nds7_table;
 
         if (table[page]) |some_ptr| {
-            const ptr: [*]align(1) T = @ptrCast(@alignCast(some_ptr));
+            const ptr: [*]T = @ptrCast(@alignCast(some_ptr));
             ptr[offset / @sizeOf(T)] = value;
 
             return;

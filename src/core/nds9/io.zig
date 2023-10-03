@@ -74,10 +74,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0188 => bus.io.shared.ipc_fifo.send(.nds9, value) catch |e| std.debug.panic("IPC FIFO Error: {}", .{e}),
 
             0x0400_0240 => {
-                bus.ppu.io.vramcnt_a.raw = @truncate(value >> 0); // 0x0400_0240
-                bus.ppu.io.vramcnt_b.raw = @truncate(value >> 8); // 0x0400_0241
-                bus.ppu.io.vramcnt_c.raw = @truncate(value >> 16); // 0x0400_0242
-                bus.ppu.io.vramcnt_d.raw = @truncate(value >> 24); // 0x0400_0243
+                bus.ppu.vram.io.cnt_a.raw = @truncate(value >> 0); // 0x0400_0240
+                bus.ppu.vram.io.cnt_b.raw = @truncate(value >> 8); // 0x0400_0241
+                bus.ppu.vram.io.cnt_c.raw = @truncate(value >> 16); // 0x0400_0242
+                bus.ppu.vram.io.cnt_d.raw = @truncate(value >> 24); // 0x0400_0243
             },
 
             0x0400_0208 => bus.io.shared.ime = value & 1 == 1,
@@ -131,13 +131,45 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
         u8 => switch (address) {
-            0x0400_0240 => bus.ppu.io.vramcnt_a.raw = value,
-            0x0400_0241 => bus.ppu.io.vramcnt_b.raw = value,
-            0x0400_0242 => bus.ppu.io.vramcnt_c.raw = value,
-            0x0400_0243 => bus.ppu.io.vramcnt_d.raw = value,
+            0x0400_0240 => {
+                bus.ppu.vram.io.cnt_a.raw = value;
+                bus.ppu.vram.update();
+            },
+            0x0400_0241 => {
+                bus.ppu.vram.io.cnt_b.raw = value;
+                bus.ppu.vram.update();
+            },
+            0x0400_0242 => {
+                bus.ppu.vram.io.cnt_c.raw = value;
+                bus.ppu.vram.update();
+            },
+            0x0400_0243 => {
+                bus.ppu.vram.io.cnt_d.raw = value;
+                bus.ppu.vram.update();
+            },
+            0x0400_0244 => {
+                bus.ppu.vram.io.cnt_e.raw = value;
+                bus.ppu.vram.update();
+            },
+            0x0400_0245 => {
+                bus.ppu.vram.io.cnt_f.raw = value;
+                bus.ppu.vram.update();
+            },
+            0x0400_0246 => {
+                bus.ppu.vram.io.cnt_g.raw = value;
+                bus.ppu.vram.update();
+            },
             0x0400_0247 => {
                 bus.io.shared.wramcnt.raw = value;
                 bus.wram.update(bus.io.shared.wramcnt);
+            },
+            0x0400_0248 => {
+                bus.ppu.vram.io.cnt_h.raw = value;
+                bus.ppu.vram.update();
+            },
+            0x0400_0249 => {
+                bus.ppu.vram.io.cnt_i.raw = value;
+                bus.ppu.vram.update();
             },
 
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),

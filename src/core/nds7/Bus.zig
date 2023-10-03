@@ -5,6 +5,7 @@ const Scheduler = @import("../Scheduler.zig");
 const SharedIo = @import("../io.zig").Io;
 const SharedContext = @import("../emu.zig").SharedContext;
 const Wram = @import("../emu.zig").Wram;
+const Vram = @import("../ppu.zig").Vram;
 const forceAlign = @import("../emu.zig").forceAlign;
 
 const Allocator = std.mem.Allocator;
@@ -19,6 +20,7 @@ scheduler: *Scheduler,
 main: *[4 * MiB]u8,
 wram_shr: *Wram,
 wram: *[64 * KiB]u8,
+vram: *Vram,
 io: io.Io,
 
 pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_ctx: SharedContext) !@This() {
@@ -29,6 +31,7 @@ pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_ctx: SharedConte
     return .{
         .main = shared_ctx.main,
         .wram_shr = shared_ctx.wram,
+        .vram = shared_ctx.vram,
         .wram = wram,
         .scheduler = scheduler,
         .io = io.Io.init(shared_ctx.io),
@@ -65,10 +68,11 @@ fn _read(self: *@This(), comptime T: type, comptime mode: Mode, address: u32) T 
         0x0200_0000...0x02FF_FFFF => readInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count]),
         0x0300_0000...0x037F_FFFF => switch (self.io.shared.wramcnt.mode.read()) {
             0b00 => readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count]),
-            else => self.wram_shr.read(T, .nds7, address & 0x7FFF),
+            else => self.wram_shr.read(T, .nds7, aligned_addr),
         },
         0x0380_0000...0x0380_FFFF => readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count]),
         0x0400_0000...0x04FF_FFFF => io.read(self, T, aligned_addr),
+        0x0600_0000...0x06FF_FFFF => self.vram.read(T, .nds7, aligned_addr),
         else => warn("unexpected read: 0x{x:0>8} -> {}", .{ aligned_addr, T }),
     };
 }
@@ -97,10 +101,11 @@ fn _write(self: *@This(), comptime T: type, comptime mode: Mode, address: u32, v
         0x0200_0000...0x02FF_FFFF => writeInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count], value),
         0x0300_0000...0x037F_FFFF => switch (self.io.shared.wramcnt.mode.read()) {
             0b00 => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
-            else => self.wram_shr.write(T, .nds7, address & 0x7FFF, value),
+            else => self.wram_shr.write(T, .nds7, aligned_addr, value),
         },
         0x0380_0000...0x0380_FFFF => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
         0x0400_0000...0x04FF_FFFF => io.write(self, T, aligned_addr, value),
+        0x0600_0000...0x06FF_FFFF => self.vram.write(T, .nds7, aligned_addr, value),
         else => log.warn("unexpected write: 0x{X:}{} -> 0x{X:0>8}", .{ value, T, aligned_addr }),
     }
 }

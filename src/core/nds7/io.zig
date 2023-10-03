@@ -33,6 +33,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u8 => switch (address) {
+            0x0400_0240 => bus.vram.stat().raw,
             0x0400_0241 => bus.io.shared.wramcnt.raw,
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
@@ -66,3 +67,9 @@ fn warn(comptime format: []const u8, args: anytype) u0 {
     log.warn(format, args);
     return 0;
 }
+
+pub const Vramstat = extern union {
+    vramc_enabled: Bit(u8, 0),
+    vramd_enabled: Bit(u8, 1),
+    raw: u8,
+};
