@@ -243,7 +243,6 @@ pub const Vram = struct {
         return .{ .raw = (vram_d << 1) | vram_c };
     }
 
-    const Range = struct { min: u32, max: u32 };
     const Kind = enum {
         a,
         b,
@@ -271,113 +270,77 @@ pub const Vram = struct {
         }
     };
 
-    /// max inclusive
-    fn range(comptime kind: Kind, mst: u3, offset: u2) Range {
+    // TODO: Rename
+    fn range(comptime kind: Kind, mst: u3, offset: u2) u32 {
         const ofs: u32 = offset;
         // panic messages are from GBATEK
 
         return switch (kind) {
             .a => switch (mst) {
-                0 => .{ .min = 0x0680_0000, .max = 0x0682_0000 },
-                1 => blk: {
-                    const base = 0x0600_0000 + (0x0002_0000 * ofs);
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
-                2 => blk: {
-                    const base = 0x0640_0000 + (0x0002_0000 * (ofs & 0b01));
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
+                0 => 0x0680_0000,
+                1 => 0x0600_0000 + (0x0002_0000 * ofs),
+                2 => 0x0640_0000 + (0x0002_0000 * (ofs & 0b01)),
                 3 => @panic("VRAMCNT_A: Slot OFS(0-3)"),
                 else => std.debug.panic("Invalid MST for VRAMCNT_{s}", .{[_]u8{std.ascii.toUpper(@tagName(kind)[0])}}),
             },
             .b => switch (mst) {
-                0 => .{ .min = 0x0682_0000, .max = 0x0684_0000 },
-                1 => blk: {
-                    const base = 0x0600_0000 + (0x0002_0000 * ofs);
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
-                2 => blk: {
-                    const base = 0x0640_0000 + (0x0002_0000 * (ofs & 0b01));
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
+                0 => 0x0682_0000,
+                1 => 0x0600_0000 + (0x0002_0000 * ofs),
+                2 => 0x0640_0000 + (0x0002_0000 * (ofs & 0b01)),
                 3 => @panic("VRAMCNT_B: Slot OFS(0-3)"),
                 else => std.debug.panic("Invalid MST for VRAMCNT_{s}", .{[_]u8{std.ascii.toUpper(@tagName(kind)[0])}}),
             },
             .c => switch (mst) {
-                0 => .{ .min = 0x0684_0000, .max = 0x0686_0000 },
-                1 => blk: {
-                    const base = 0x0600_0000 + (0x0002_0000 * ofs);
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
-                2 => blk: {
-                    const base = 0x0600_0000 + (0x0002_0000 * (ofs & 0b01));
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
+                0 => 0x0684_0000,
+                1 => 0x0600_0000 + (0x0002_0000 * ofs),
+                2 => 0x0600_0000 + (0x0002_0000 * (ofs & 0b01)),
                 3 => @panic("VRAMCNT_C: Slot OFS(0-3)"),
-                4 => .{ .min = 0x0620_0000, .max = 0x0620_0000 + kind.size() },
+                4 => 0x0620_0000,
                 else => std.debug.panic("Invalid MST for VRAMCNT_{s}", .{[_]u8{std.ascii.toUpper(@tagName(kind)[0])}}),
             },
             .d => switch (mst) {
-                0 => .{ .min = 0x0686_0000, .max = 0x0688_0000 },
-                1 => blk: {
-                    const base = 0x0600_0000 + (0x0002_0000 * ofs);
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
-                2 => blk: {
-                    const base = 0x0600_0000 + (0x0002_0000 * (ofs & 0b01));
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
+                0 => 0x0686_0000,
+                1 => 0x0600_0000 + (0x0002_0000 * ofs),
+                2 => 0x0600_0000 + (0x0002_0000 * (ofs & 0b01)),
                 3 => @panic("VRAMCNT_D: Slot OFS(0-3)"),
-                4 => .{ .min = 0x0660_0000, .max = 0x0660_0000 + kind.size() },
+                4 => 0x0660_0000,
                 else => std.debug.panic("Invalid MST for VRAMCNT_{s}", .{[_]u8{std.ascii.toUpper(@tagName(kind)[0])}}),
             },
             .e => switch (mst) {
-                0 => .{ .min = 0x0688_0000, .max = 0x0689_0000 },
-                1 => .{ .min = 0x0600_0000, .max = 0x0600_0000 + kind.size() },
-                2 => .{ .min = 0x0640_0000, .max = 0x0640_0000 + kind.size() },
+                0 => 0x0688_0000,
+                1 => 0x0600_0000,
+                2 => 0x0640_0000,
                 3 => @panic("VRAMCNT_E: Slots 0-3"),
                 else => std.debug.panic("Invalid MST for VRAMCNT_{s}", .{[_]u8{std.ascii.toUpper(@tagName(kind)[0])}}),
             },
             .f => switch (mst) {
-                0 => .{ .min = 0x0689_0000, .max = 0x0689_4000 },
-                1 => blk: {
-                    const base = 0x0600_0000 + (0x0000_4000 * (ofs & 0b01)) + (0x0001_0000 * (ofs >> 1));
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
-                2 => blk: {
-                    const base = 0x0640_0000 + (0x0000_4000 * (ofs & 0b01)) + (0x0001_0000 * (ofs >> 1));
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
+                0 => 0x0689_0000,
+                1 => 0x0600_0000 + (0x0000_4000 * (ofs & 0b01)) + (0x0001_0000 * (ofs >> 1)),
+                2 => 0x0640_0000 + (0x0000_4000 * (ofs & 0b01)) + (0x0001_0000 * (ofs >> 1)),
                 3 => @panic("VRAMCNT_F: Slot (OFS.0*1)+(OFS.1*4)"),
                 4 => @panic("VRAMCNT_F: Slot 0-1 (OFS=0), Slot 2-3 (OFS=1)"),
                 5 => @panic("VRAMCNT_F: Slot 0"),
                 else => std.debug.panic("Invalid MST for VRAMCNT_{s}", .{[_]u8{std.ascii.toUpper(@tagName(kind)[0])}}),
             },
             .g => switch (mst) {
-                0 => .{ .min = 0x0689_4000, .max = 0x0689_8000 },
-                1 => blk: {
-                    const base = 0x0600_0000 + (0x0000_4000 * (ofs & 0b01)) + (0x0001_0000 * (ofs >> 1));
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
-                2 => blk: {
-                    const base = 0x0640_0000 + (0x0000_4000 * (ofs & 0b01)) + (0x0001_0000 * (ofs >> 1));
-                    break :blk .{ .min = base, .max = base + kind.size() };
-                },
+                0 => 0x0689_4000,
+                1 => 0x0600_0000 + (0x0000_4000 * (ofs & 0b01)) + (0x0001_0000 * (ofs >> 1)),
+                2 => 0x0640_0000 + (0x0000_4000 * (ofs & 0b01)) + (0x0001_0000 * (ofs >> 1)),
                 3 => @panic("VRAMCNT_G: Slot (OFS.0*1)+(OFS.1*4)"),
                 4 => @panic("VRAMCNT_G: Slot 0-1 (OFS=0), Slot 2-3 (OFS=1)"),
                 5 => @panic("VRAMCNT_G: Slot 0"),
                 else => std.debug.panic("Invalid MST for VRAMCNT_{s}", .{[_]u8{std.ascii.toUpper(@tagName(kind)[0])}}),
             },
             .h => switch (mst) {
-                0 => .{ .min = 0x0689_8000, .max = 0x068A_0000 },
-                1 => .{ .min = 0x0620_0000, .max = 0x0620_0000 + kind.size() },
+                0 => 0x0689_8000,
+                1 => 0x0620_0000,
                 2 => @panic("VRAMCNT_H: Slot 0-3"),
                 else => std.debug.panic("Invalid MST for VRAMCNT_{s}", .{[_]u8{std.ascii.toUpper(@tagName(kind)[0])}}),
             },
             .i => switch (mst) {
-                0 => .{ .min = 0x068A_0000, .max = 0x068A_4000 },
-                1 => .{ .min = 0x0620_8000, .max = 0x0620_8000 + kind.size() },
-                2 => .{ .min = 0x0660_0000, .max = 0x0660_0000 + kind.size() },
+                0 => 0x068A_0000,
+                1 => 0x0620_8000,
+                2 => 0x0660_0000,
                 3 => @panic("Slot 0"),
                 else => std.debug.panic("Invalid MST for VRAMCNT_{s}", .{[_]u8{std.ascii.toUpper(@tagName(kind)[0])}}),
             },
@@ -430,6 +393,7 @@ pub const Vram = struct {
         };
     }
 
+    // TODO: We always update the entirety of VRAM when that argubably isn't necessary
     pub fn update(self: *@This()) void {
         const nds9_tbl = @constCast(self.nds9_table);
         const nds7_tbl = @constCast(self.nds7_table);
@@ -445,10 +409,11 @@ pub const Vram = struct {
                     else => cnt.offset.read(),
                 };
 
-                const rnge = range(kind, cnt.mst.read(), ofs);
+                const min = range(kind, cnt.mst.read(), ofs);
+                const max = min + kind.size();
                 const offset = addr & (kind.size() - 1);
 
-                if (rnge.min <= addr and addr < rnge.max) {
+                if (min <= addr and addr < max) {
                     if ((kind == .c or kind == .d) and cnt.mst.read() == 2) {
                         // Allocate to ARM7
                         nds7_ptr.* = self._buf[buf_offset(kind) + offset ..].ptr;
