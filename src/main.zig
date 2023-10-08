@@ -4,7 +4,7 @@ const clap = @import("zig-clap");
 const emu = @import("core/emu.zig");
 
 const Ui = @import("platform.zig").Ui;
-const SharedContext = @import("core/emu.zig").SharedContext;
+const SharedCtx = @import("core/emu.zig").SharedCtx;
 const System = @import("core/emu.zig").System;
 const Scheduler = @import("core/Scheduler.zig");
 
@@ -34,8 +34,8 @@ pub fn main() !void {
     const rom_file = try std.fs.cwd().openFile(rom_path, .{});
     defer rom_file.close();
 
-    const shared_ctx = try SharedContext.init(allocator);
-    defer shared_ctx.deinit(allocator);
+    const ctx = try SharedCtx.init(allocator);
+    defer ctx.deinit(allocator);
 
     var scheduler = try Scheduler.init(allocator);
     defer scheduler.deinit();
@@ -47,8 +47,8 @@ pub fn main() !void {
 
         var cp15 = System.Cp15{};
 
-        var bus7 = try System.Bus7.init(allocator, &scheduler, shared_ctx);
-        var bus9 = try System.Bus9.init(allocator, &scheduler, shared_ctx);
+        var bus7 = try System.Bus7.init(allocator, &scheduler, ctx);
+        var bus9 = try System.Bus9.init(allocator, &scheduler, ctx);
 
         var arm7tdmi = System.Arm7tdmi.init(IScheduler.init(&scheduler), IBus.init(&bus7));
         var arm946es = System.Arm946es.init(IScheduler.init(&scheduler), IBus.init(&bus9), ICoprocessor.init(&cp15));

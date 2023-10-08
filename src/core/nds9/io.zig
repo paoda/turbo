@@ -4,7 +4,7 @@ const Bitfield = @import("bitfield").Bitfield;
 const Bit = @import("bitfield").Bit;
 
 const Bus = @import("Bus.zig");
-const SharedIo = @import("../io.zig").Io;
+const SharedCtx = @import("../emu.zig").SharedCtx;
 const masks = @import("../io.zig").masks;
 
 const sext = @import("../../util.zig").sext;
@@ -12,7 +12,7 @@ const sext = @import("../../util.zig").sext;
 const log = std.log.scoped(.nds9_io);
 
 pub const Io = struct {
-    shared: *SharedIo,
+    shr: *SharedCtx.Io,
 
     /// POWCNT1 - Graphics Power Control
     /// Read / Write
@@ -25,17 +25,17 @@ pub const Io = struct {
     div: Divisor = .{},
     sqrt: SquareRootUnit = .{},
 
-    pub fn init(io: *SharedIo) @This() {
-        return .{ .shared = io };
+    pub fn init(io: *SharedCtx.Io) @This() {
+        return .{ .shr = io };
     }
 };
 
 pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
     return switch (T) {
         u32 => switch (address) {
-            0x0400_0208 => @intFromBool(bus.io.shared.ime),
-            0x0400_0210 => bus.io.shared.ie,
-            0x0400_0214 => bus.io.shared.irq,
+            0x0400_0208 => @intFromBool(bus.io.shr.ime),
+            0x0400_0210 => bus.io.shr.ie,
+            0x0400_0214 => bus.io.shr.irq,
 
             0x0400_02A0 => @truncate(bus.io.div.result),
             0x0400_02A4 => @truncate(bus.io.div.result >> 32),
@@ -43,15 +43,15 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_02AC => @truncate(bus.io.div.remainder >> 32),
             0x0400_02B4 => @truncate(bus.io.sqrt.result),
 
-            0x0410_0000 => bus.io.shared.ipc_fifo.recv(.nds9),
+            0x0410_0000 => bus.io.shr.ipc_fifo.recv(.nds9),
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u16 => switch (address) {
             0x0400_0004 => bus.ppu.io.dispstat.raw,
             0x0400_0130 => bus.io.keyinput.load(.Monotonic),
 
-            0x0400_0180 => @truncate(bus.io.shared.ipc_fifo._nds9.sync.raw),
-            0x0400_0184 => @truncate(bus.io.shared.ipc_fifo._nds9.cnt.raw),
+            0x0400_0180 => @truncate(bus.io.shr.ipc_fifo._nds9.sync.raw),
+            0x0400_0184 => @truncate(bus.io.shr.ipc_fifo._nds9.cnt.raw),
 
             0x0400_0280 => @truncate(bus.io.div.cnt.raw),
             0x0400_02B0 => @truncate(bus.io.sqrt.cnt.raw),
@@ -69,9 +69,9 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
     switch (T) {
         u32 => switch (address) {
             0x0400_0000 => bus.ppu.io.dispcnt_a.raw = value,
-            0x0400_0180 => bus.io.shared.ipc_fifo.setIpcSync(.nds9, value),
-            0x0400_0184 => bus.io.shared.ipc_fifo.setIpcFifoCnt(.nds9, value),
-            0x0400_0188 => bus.io.shared.ipc_fifo.send(.nds9, value) catch |e| std.debug.panic("IPC FIFO Error: {}", .{e}),
+            0x0400_0180 => bus.io.shr.ipc_fifo.setIpcSync(.nds9, value),
+            0x0400_0184 => bus.io.shr.ipc_fifo.setIpcFifoCnt(.nds9, value),
+            0x0400_0188 => bus.io.shr.ipc_fifo.send(.nds9, value) catch |e| std.debug.panic("IPC FIFO Error: {}", .{e}),
 
             0x0400_0240 => {
                 bus.ppu.vram.io.cnt_a.raw = @truncate(value >> 0); // 0x0400_0240
@@ -80,9 +80,9 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
                 bus.ppu.vram.io.cnt_d.raw = @truncate(value >> 24); // 0x0400_0243
             },
 
-            0x0400_0208 => bus.io.shared.ime = value & 1 == 1,
-            0x0400_0210 => bus.io.shared.ie = value,
-            0x0400_0214 => bus.io.shared.irq = value,
+            0x0400_0208 => bus.io.shr.ime = value & 1 == 1,
+            0x0400_0210 => bus.io.shr.ie = value,
+            0x0400_0214 => bus.io.shr.irq = value,
 
             0x0400_0290 => {
                 bus.io.div.numerator = masks.mask(bus.io.div.numerator, value, 0xFFFF_FFFF);
@@ -114,9 +114,9 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
         u16 => switch (address) {
-            0x0400_0180 => bus.io.shared.ipc_fifo.setIpcSync(.nds9, value),
-            0x0400_0184 => bus.io.shared.ipc_fifo.setIpcFifoCnt(.nds9, value),
-            0x0400_0208 => bus.io.shared.ime = value & 1 == 1,
+            0x0400_0180 => bus.io.shr.ipc_fifo.setIpcSync(.nds9, value),
+            0x0400_0184 => bus.io.shr.ipc_fifo.setIpcFifoCnt(.nds9, value),
+            0x0400_0208 => bus.io.shr.ime = value & 1 == 1,
 
             0x0400_0280 => {
                 bus.io.div.cnt.raw = value;
@@ -160,8 +160,8 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
                 bus.ppu.vram.update();
             },
             0x0400_0247 => {
-                bus.io.shared.wramcnt.raw = value;
-                bus.wram.update(bus.io.shared.wramcnt);
+                bus.io.shr.wramcnt.raw = value;
+                bus.wram.update(bus.io.shr.wramcnt);
             },
             0x0400_0248 => {
                 bus.ppu.vram.io.cnt_h.raw = value;

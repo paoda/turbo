@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const Header = @import("cartridge.zig").Header;
-const SharedIo = @import("io.zig").Io;
 const Scheduler = @import("Scheduler.zig");
 
 const Allocator = std.mem.Allocator;
@@ -90,13 +89,14 @@ pub fn runFrame(scheduler: *Scheduler, system: System) void {
 }
 
 // FIXME: Perf win to allocating on the stack instead?
-pub const SharedContext = struct {
+pub const SharedCtx = struct {
     const MiB = 0x100000;
     const KiB = 0x400;
 
+    pub const Io = @import("io.zig").Io;
     const Vram = @import("ppu.zig").Vram;
 
-    io: *SharedIo,
+    io: *Io,
     main: *[4 * MiB]u8,
     wram: *Wram,
     vram: *Vram,
@@ -112,7 +112,7 @@ pub const SharedContext = struct {
 
         const ctx = .{
             .io = blk: {
-                const io = try allocator.create(SharedIo);
+                const io = try allocator.create(Io);
                 io.* = .{};
 
                 break :blk io;

@@ -3,7 +3,7 @@ const io = @import("io.zig");
 
 const Ppu = @import("../ppu.zig").Ppu;
 const Scheduler = @import("../Scheduler.zig");
-const SharedContext = @import("../emu.zig").SharedContext;
+const SharedCtx = @import("../emu.zig").SharedCtx;
 const Wram = @import("../emu.zig").Wram;
 const forceAlign = @import("../emu.zig").forceAlign;
 
@@ -22,16 +22,16 @@ ppu: Ppu,
 
 scheduler: *Scheduler,
 
-pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_ctx: SharedContext) !@This() {
+pub fn init(allocator: Allocator, scheduler: *Scheduler, ctx: SharedCtx) !@This() {
     const dots_per_cycle = 3; // ARM946E-S runs twice as fast as the ARM7TDMI
     scheduler.push(.{ .nds9 = .draw }, 256 * dots_per_cycle);
 
     return .{
-        .main = shared_ctx.main,
-        .wram = shared_ctx.wram,
-        .ppu = try Ppu.init(allocator, shared_ctx.vram),
+        .main = ctx.main,
+        .wram = ctx.wram,
+        .ppu = try Ppu.init(allocator, ctx.vram),
         .scheduler = scheduler,
-        .io = io.Io.init(shared_ctx.io),
+        .io = io.Io.init(ctx.io),
     };
 }
 

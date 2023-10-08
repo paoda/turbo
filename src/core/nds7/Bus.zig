@@ -2,8 +2,7 @@ const std = @import("std");
 const io = @import("io.zig");
 
 const Scheduler = @import("../Scheduler.zig");
-const SharedIo = @import("../io.zig").Io;
-const SharedContext = @import("../emu.zig").SharedContext;
+const SharedCtx = @import("../emu.zig").SharedCtx;
 const Wram = @import("../emu.zig").Wram;
 const Vram = @import("../ppu.zig").Vram;
 const forceAlign = @import("../emu.zig").forceAlign;
@@ -18,23 +17,23 @@ const log = std.log.scoped(.nds7_bus);
 
 scheduler: *Scheduler,
 main: *[4 * MiB]u8,
-wram_shr: *Wram,
+shr_wram: *Wram,
 wram: *[64 * KiB]u8,
 vram: *Vram,
 io: io.Io,
 
-pub fn init(allocator: Allocator, scheduler: *Scheduler, shared_ctx: SharedContext) !@This() {
+pub fn init(allocator: Allocator, scheduler: *Scheduler, ctx: SharedCtx) !@This() {
     const wram = try allocator.create([64 * KiB]u8);
     errdefer allocator.destroy(wram);
     @memset(wram, 0);
 
     return .{
-        .main = shared_ctx.main,
-        .wram_shr = shared_ctx.wram,
-        .vram = shared_ctx.vram,
+        .main = ctx.main,
+        .shr_wram = ctx.wram,
+        .vram = ctx.vram,
         .wram = wram,
         .scheduler = scheduler,
-        .io = io.Io.init(shared_ctx.io),
+        .io = io.Io.init(ctx.io),
     };
 }
 
@@ -66,9 +65,9 @@ fn _read(self: *@This(), comptime T: type, comptime mode: Mode, address: u32) T 
 
     return switch (aligned_addr) {
         0x0200_0000...0x02FF_FFFF => readInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count]),
-        0x0300_0000...0x037F_FFFF => switch (self.io.shared.wramcnt.mode.read()) {
+        0x0300_0000...0x037F_FFFF => switch (self.io.shr.wramcnt.mode.read()) {
             0b00 => readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count]),
-            else => self.wram_shr.read(T, .nds7, aligned_addr),
+            else => self.shr_wram.read(T, .nds7, aligned_addr),
         },
         0x0380_0000...0x0380_FFFF => readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count]),
         0x0400_0000...0x04FF_FFFF => io.read(self, T, aligned_addr),
@@ -99,9 +98,9 @@ fn _write(self: *@This(), comptime T: type, comptime mode: Mode, address: u32, v
 
     switch (aligned_addr) {
         0x0200_0000...0x02FF_FFFF => writeInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count], value),
-        0x0300_0000...0x037F_FFFF => switch (self.io.shared.wramcnt.mode.read()) {
+        0x0300_0000...0x037F_FFFF => switch (self.io.shr.wramcnt.mode.read()) {
             0b00 => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
-            else => self.wram_shr.write(T, .nds7, aligned_addr, value),
+            else => self.shr_wram.write(T, .nds7, aligned_addr, value),
         },
         0x0380_0000...0x0380_FFFF => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
         0x0400_0000...0x04FF_FFFF => io.write(self, T, aligned_addr, value),
