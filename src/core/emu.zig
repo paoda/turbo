@@ -82,6 +82,8 @@ pub fn loadFirm(allocator: Allocator, system: System, firm_path: []const u8) !vo
         const path = try std.mem.join(allocator, "/", &.{ firm_path, "bios9.bin" });
         defer allocator.free(path);
 
+        log.debug("bios9 path: {s}", .{path});
+
         const file = try std.fs.cwd().openFile(path, .{});
         defer file.close();
 

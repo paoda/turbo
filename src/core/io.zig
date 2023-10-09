@@ -7,10 +7,6 @@ const handleInterrupt = @import("emu.zig").handleInterrupt;
 
 const log = std.log.scoped(.shared_io);
 
-// FIXME: This whole thing is bad bad bad bad bad
-// I think only the IPC stuff needs to be here, since they talk to each other.
-// every other "shared I/O register" is just duplicated on both CPUs. So they shouldn't be here
-
 pub const Io = struct {
     /// Inter Process Communication FIFO
     ipc: Ipc = .{},
@@ -77,11 +73,11 @@ const Ipc = struct {
                 if (value >> 3 & 1 == 1) {
                     self._nds7.fifo.reset();
 
-                    self._nds7.cnt.send_fifo_empty.write(true);
-                    self._nds9.cnt.recv_fifo_empty.write(true);
+                    self._nds7.cnt.send_fifo_empty.set();
+                    self._nds9.cnt.recv_fifo_empty.set();
 
-                    self._nds7.cnt.send_fifo_full.write(false);
-                    self._nds9.cnt.recv_fifo_full.write(false);
+                    self._nds7.cnt.send_fifo_full.unset();
+                    self._nds9.cnt.recv_fifo_full.unset();
                 }
             },
             .nds9 => {
@@ -98,11 +94,11 @@ const Ipc = struct {
                 if (value >> 3 & 1 == 1) {
                     self._nds9.fifo.reset();
 
-                    self._nds9.cnt.send_fifo_empty.write(true);
-                    self._nds7.cnt.recv_fifo_empty.write(true);
+                    self._nds9.cnt.send_fifo_empty.set();
+                    self._nds7.cnt.recv_fifo_empty.set();
 
-                    self._nds9.cnt.send_fifo_full.write(false);
-                    self._nds7.cnt.recv_fifo_full.write(false);
+                    self._nds9.cnt.send_fifo_full.unset();
+                    self._nds7.cnt.recv_fifo_full.unset();
                 }
             },
         }
@@ -125,16 +121,31 @@ const Ipc = struct {
                 if (!self._nds7.cnt.enable_fifos.read()) return;
                 try self._nds7.fifo.push(value);
 
+                const not_empty_cache = !self._nds9.cnt.recv_fifo_empty.read();
+
                 // update status bits
                 self._nds7.cnt.send_fifo_empty.write(self._nds7.fifo._len() == 0);
                 self._nds9.cnt.recv_fifo_empty.write(self._nds7.fifo._len() == 0);
 
                 self._nds7.cnt.send_fifo_full.write(self._nds7.fifo._len() == 0x10);
                 self._nds9.cnt.recv_fifo_full.write(self._nds7.fifo._len() == 0x10);
+
+                const not_empty = !self._nds9.cnt.recv_fifo_empty.read();
+
+                if (self._nds9.cnt.recv_fifo_irq_enable.read() and !not_empty_cache and not_empty) {
+                    // NDS7 Send | NDS9 RECV (Handling Not Empty)
+
+                    const bus: *System.Bus9 = @ptrCast(@alignCast(self.arm946es.?.bus.ptr));
+                    bus.io.irq.ipc_recv_not_empty.set();
+
+                    handleInterrupt(.nds9, self.arm946es.?);
+                }
             },
             .nds9 => {
                 if (!self._nds9.cnt.enable_fifos.read()) return;
                 try self._nds9.fifo.push(value);
+
+                const not_empty_cache = !self._nds7.cnt.recv_fifo_empty.read();
 
                 // update status bits
                 self._nds9.cnt.send_fifo_empty.write(self._nds9.fifo._len() == 0);
@@ -142,6 +153,17 @@ const Ipc = struct {
 
                 self._nds9.cnt.send_fifo_full.write(self._nds9.fifo._len() == 0x10);
                 self._nds7.cnt.recv_fifo_full.write(self._nds9.fifo._len() == 0x10);
+
+                const not_empty = !self._nds7.cnt.recv_fifo_empty.read();
+
+                if (self._nds7.cnt.recv_fifo_irq_enable.read() and !not_empty_cache and not_empty) {
+                    // NDS9 Send | NDS7 RECV (Handling Not Empty)
+
+                    const bus: *System.Bus7 = @ptrCast(@alignCast(self.arm7tdmi.?.bus.ptr));
+                    bus.io.irq.ipc_recv_not_empty.set();
+
+                    handleInterrupt(.nds7, self.arm7tdmi.?);
+                }
             },
         }
     }
@@ -162,12 +184,23 @@ const Ipc = struct {
                     break :blk self._nds7.last_read orelse 0x0000_0000;
                 };
 
+                const empty_cache = self._nds9.cnt.send_fifo_empty.read();
+
                 // update status bits
                 self._nds7.cnt.recv_fifo_empty.write(self._nds9.fifo._len() == 0);
                 self._nds9.cnt.send_fifo_empty.write(self._nds9.fifo._len() == 0);
 
                 self._nds7.cnt.recv_fifo_full.write(self._nds9.fifo._len() == 0x10);
                 self._nds9.cnt.send_fifo_full.write(self._nds9.fifo._len() == 0x10);
+
+                const empty = self._nds9.cnt.send_fifo_empty.read();
+
+                if (self._nds9.cnt.send_fifo_irq_enable.read() and (!empty_cache and empty)) {
+                    const bus: *System.Bus9 = @ptrCast(@alignCast(self.arm946es.?.bus.ptr));
+                    bus.io.irq.ipc_send_empty.set();
+
+                    handleInterrupt(.nds9, self.arm946es.?);
+                }
 
                 return value;
             },
@@ -183,12 +216,23 @@ const Ipc = struct {
                     break :blk self._nds7.last_read orelse 0x0000_0000;
                 };
 
+                const empty_cache = self._nds7.cnt.send_fifo_empty.read();
+
                 // update status bits
                 self._nds9.cnt.recv_fifo_empty.write(self._nds7.fifo._len() == 0);
                 self._nds7.cnt.send_fifo_empty.write(self._nds7.fifo._len() == 0);
 
                 self._nds9.cnt.recv_fifo_full.write(self._nds7.fifo._len() == 0x10);
                 self._nds7.cnt.send_fifo_full.write(self._nds7.fifo._len() == 0x10);
+
+                const empty = self._nds7.cnt.send_fifo_empty.read();
+
+                if (self._nds7.cnt.send_fifo_irq_enable.read() and (!empty_cache and empty)) {
+                    const bus: *System.Bus7 = @ptrCast(@alignCast(self.arm7tdmi.?.bus.ptr));
+                    bus.io.irq.ipc_send_empty.set();
+
+                    handleInterrupt(.nds7, self.arm7tdmi.?);
+                }
 
                 return value;
             },
@@ -263,7 +307,6 @@ pub const masks = struct {
         const err_mask: u32 = 0x4000; // bit 14
 
         const err_bit = (cnt & err_mask) & ~(value & err_mask);
-        if (value & 0b1000 != 0) log.err("TODO: handle IPCFIFOCNT.3", .{});
 
         const without_err = (@as(u32, value) & _mask) | (cnt & ~_mask);
         return (without_err & ~err_mask) | err_bit;
@@ -278,6 +321,8 @@ pub const masks = struct {
 // FIXME: bitfields depends on NDS9 / NDS7
 pub const IntEnable = extern union {
     ipcsync: Bit(u32, 16),
+    ipc_send_empty: Bit(u32, 17),
+    ipc_recv_not_empty: Bit(u32, 18),
     raw: u32,
 };
 
