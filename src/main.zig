@@ -13,6 +13,7 @@ const ClapResult = clap.Result(clap.Help, &cli_params, clap.parsers.default);
 
 const cli_params = clap.parseParamsComptime(
     \\-h, --help        Display this help and exit.
+    \\-f, --firm <str>  Path to NDS Firmware Directory
     \\<str>             Path to the NDS ROM
     \\
 );
@@ -31,10 +32,10 @@ pub fn main() !void {
     const rom_path = try handlePositional(result);
     log.debug("loading rom from: {s}", .{rom_path});
 
-    const rom_file = try std.fs.cwd().openFile(rom_path, .{});
-    defer rom_file.close();
+    const firm_path = result.args.firm;
+    log.debug("loading firmware from from: {?s}", .{firm_path});
 
-    const ctx = try SharedCtx.init(allocator);
+    var ctx = try SharedCtx.init(allocator);
     defer ctx.deinit(allocator);
 
     var scheduler = try Scheduler.init(allocator);
@@ -56,7 +57,10 @@ pub fn main() !void {
         break :blk .{ .arm7tdmi = &arm7tdmi, .arm946es = &arm946es, .bus7 = &bus7, .bus9 = &bus9, .cp15 = &cp15 };
     };
     defer system.deinit(allocator);
-    const rom_title = try emu.load(allocator, system, rom_file);
+
+    ctx.io.ipc.configure(system); // Shared I/O needs access to both CPUs (e.g. IPCSYNC)
+    const rom_title = try emu.load(allocator, system, rom_path);
+    if (firm_path) |path| try emu.loadFirm(allocator, system, path);
 
     var ui = try Ui.init(allocator);
     defer ui.deinit(allocator);

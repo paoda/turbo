@@ -8,13 +8,16 @@ const Allocator = std.mem.Allocator;
 /// Load a NDS Cartridge
 ///
 /// intended to be used immediately after Emulator initialization
-pub fn load(allocator: Allocator, system: System, rom_file: std.fs.File) ![12]u8 {
+pub fn load(allocator: Allocator, system: System, rom_path: []const u8) ![12]u8 {
     const log = std.log.scoped(.load_rom);
 
-    const rom_buf = try rom_file.readToEndAlloc(allocator, try rom_file.getEndPos());
-    defer allocator.free(rom_buf);
+    const file = try std.fs.cwd().openFile(rom_path, .{});
+    defer file.close();
 
-    var stream = std.io.fixedBufferStream(rom_buf);
+    const buf = try file.readToEndAlloc(allocator, try file.getEndPos());
+    defer allocator.free(buf);
+
+    var stream = std.io.fixedBufferStream(buf);
     const header = try stream.reader().readStruct(Header);
 
     log.info("Title: \"{s}\"", .{std.mem.sliceTo(&header.title, 0)});
@@ -29,7 +32,7 @@ pub fn load(allocator: Allocator, system: System, rom_file: std.fs.File) ![12]u8
         log.debug("ARM9 Size: 0x{X:0>8}", .{header.arm9_size});
 
         // Copy ARM9 Code into Main Memory
-        for (rom_buf[header.arm9_rom_offset..][0..header.arm9_size], 0..) |value, i| {
+        for (buf[header.arm9_rom_offset..][0..header.arm9_size], 0..) |value, i| {
             const address = header.arm9_ram_address + @as(u32, @intCast(i));
             system.bus9.dbgWrite(u8, address, value);
         }
@@ -45,7 +48,7 @@ pub fn load(allocator: Allocator, system: System, rom_file: std.fs.File) ![12]u8
         log.debug("ARM7 Size: 0x{X:0>8}", .{header.arm7_size});
 
         // Copy ARM7 Code into Main Memory
-        for (rom_buf[header.arm7_rom_offset..][0..header.arm7_size], 0..) |value, i| {
+        for (buf[header.arm7_rom_offset..][0..header.arm7_size], 0..) |value, i| {
             const address = header.arm7_ram_address + @as(u32, @intCast(i));
             system.bus7.dbgWrite(u8, address, value);
         }
@@ -54,6 +57,39 @@ pub fn load(allocator: Allocator, system: System, rom_file: std.fs.File) ![12]u8
     }
 
     return header.title;
+}
+
+/// Load NDS Firmware
+pub fn loadFirm(allocator: Allocator, system: System, firm_path: []const u8) !void {
+    const log = std.log.scoped(.load_firm);
+
+    { // NDS7 BIOS
+        const path = try std.mem.join(allocator, "/", &.{ firm_path, "bios7.bin" });
+        defer allocator.free(path);
+
+        log.debug("bios7 path: {s}", .{path});
+
+        const file = try std.fs.cwd().openFile(path, .{});
+        defer file.close();
+
+        const buf = try file.readToEndAlloc(allocator, try file.getEndPos());
+        defer allocator.free(buf);
+
+        @memcpy(system.bus7.bios[0..buf.len], buf);
+    }
+
+    { // NDS9 BIOS
+        const path = try std.mem.join(allocator, "/", &.{ firm_path, "bios9.bin" });
+        defer allocator.free(path);
+
+        const file = try std.fs.cwd().openFile(path, .{});
+        defer file.close();
+
+        const buf = try file.readToEndAlloc(allocator, try file.getEndPos());
+        defer allocator.free(buf);
+
+        @memcpy(system.bus9.bios[0..buf.len], buf);
+    }
 }
 
 const bus_clock = 33513982; // 33.513982 Hz
@@ -273,3 +309,27 @@ pub const System = struct {
         self.bus9.deinit(allocator);
     }
 };
+
+// FIXME: Using Wram.Device here is jank. System should probably carry an Enum + some Generic Type Fns
+pub fn handleInterrupt(comptime dev: Wram.Device, cpu: if (dev == .nds9) *System.Arm946es else *System.Arm7tdmi) void {
+    const Bus = if (dev == .nds9) System.Bus9 else System.Bus7;
+    const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
+
+    if (!bus_ptr.io.ime or cpu.cpsr.i.read()) return; // ensure irqs are enabled
+    if ((bus_ptr.io.ie.raw & bus_ptr.io.irq.raw) == 0) return; // ensure there is an irq to handle
+
+    // TODO: Handle HALT
+    // HALTCNG (NDS7) and CP15 (NDS9)
+
+    const ret_addr = cpu.r[15] - if (cpu.cpsr.t.read()) 0 else @as(u32, 4);
+    const spsr = cpu.cpsr;
+
+    cpu.changeMode(.Irq);
+    cpu.cpsr.t.unset();
+    cpu.cpsr.i.set();
+
+    cpu.r[14] = ret_addr;
+    cpu.spsr.raw = spsr.raw;
+    cpu.r[15] = if (dev == .nds9) 0xFFFF_0018 else 0x0000_0018;
+    cpu.pipe.reload(cpu);
+}

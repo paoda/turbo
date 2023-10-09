@@ -2,6 +2,8 @@ const std = @import("std");
 
 const Bitfield = @import("bitfield").Bitfield;
 const Bit = @import("bitfield").Bit;
+const System = @import("emu.zig").System;
+const handleInterrupt = @import("emu.zig").handleInterrupt;
 
 const log = std.log.scoped(.shared_io);
 
@@ -10,34 +12,10 @@ const log = std.log.scoped(.shared_io);
 // every other "shared I/O register" is just duplicated on both CPUs. So they shouldn't be here
 
 pub const Io = struct {
-    /// Interrupt Master Enable
-    /// Read/Write
-    ime: bool = false,
-
-    /// Interrupt Enable
-    /// Read/Write
-    ///
-    /// Caller must cast the `u32` to either `nds7.IntEnable` or `nds9.IntEnable`
-    ie: u32 = 0x0000_0000,
-
-    /// IF - Interrupt Request
-    /// Read/Write
-    ///
-    /// Caller must cast the `u32` to either `nds7.IntRequest` or `nds9.IntRequest`
-    irq: u32 = 0x0000_0000,
-
     /// Inter Process Communication FIFO
-    ipc_fifo: IpcFifo = .{},
-
-    /// Post Boot Flag
-    /// Read/Write
-    ///
-    /// Caller must cast the `u8` to either `nds7.PostFlg` or `nds9.PostFlg`
-    post_flg: u8 = @intFromEnum(nds7.PostFlag.in_progress),
+    ipc: Ipc = .{},
 
     wramcnt: WramCnt = .{ .raw = 0x00 },
-
-    // TODO: DS Cartridge I/O Ports
 };
 
 fn warn(comptime format: []const u8, args: anytype) u0 {
@@ -45,12 +23,19 @@ fn warn(comptime format: []const u8, args: anytype) u0 {
     return 0;
 }
 
-const IpcFifo = struct {
+/// Inter-Process Communication
+const Ipc = struct {
     const Sync = IpcSync;
     const Control = IpcFifoCnt;
 
     _nds7: Impl = .{},
     _nds9: Impl = .{},
+
+    // we need access to the CPUs to handle IPC IRQs
+    arm7tdmi: ?*System.Arm7tdmi = null,
+    arm946es: ?*System.Arm946es = null,
+
+    // TODO: DS Cartridge I/O Ports
 
     const Source = enum { nds7, nds9 };
 
@@ -69,6 +54,11 @@ const IpcFifo = struct {
         last_read: ?u32 = null,
     };
 
+    pub fn configure(self: *@This(), system: System) void {
+        self.arm7tdmi = system.arm7tdmi;
+        self.arm946es = system.arm946es;
+    }
+
     /// IPCSYNC
     /// Read/Write
     pub fn setIpcSync(self: *@This(), comptime src: Source, value: anytype) void {
@@ -76,6 +66,13 @@ const IpcFifo = struct {
             .nds7 => {
                 self._nds7.sync.raw = masks.ipcFifoSync(self._nds7.sync.raw, value);
                 self._nds9.sync.raw = masks.mask(self._nds9.sync.raw, (self._nds7.sync.raw >> 8) & 0xF, 0xF);
+
+                if (value >> 13 & 1 == 1 and self._nds9.sync.recv_irq.read()) {
+                    const bus: *System.Bus9 = @ptrCast(@alignCast(self.arm946es.?.bus.ptr));
+
+                    bus.io.irq.ipcsync.set();
+                    handleInterrupt(.nds9, self.arm946es.?);
+                }
 
                 if (value >> 3 & 1 == 1) {
                     self._nds7.fifo.reset();
@@ -90,6 +87,13 @@ const IpcFifo = struct {
             .nds9 => {
                 self._nds9.sync.raw = masks.ipcFifoSync(self._nds9.sync.raw, value);
                 self._nds7.sync.raw = masks.mask(self._nds7.sync.raw, (self._nds9.sync.raw >> 8) & 0xF, 0xF);
+
+                if (value >> 13 & 1 == 1 and self._nds7.sync.recv_irq.read()) {
+                    const bus: *System.Bus7 = @ptrCast(@alignCast(self.arm7tdmi.?.bus.ptr));
+
+                    bus.io.irq.ipcsync.set();
+                    handleInterrupt(.nds7, self.arm7tdmi.?);
+                }
 
                 if (value >> 3 & 1 == 1) {
                     self._nds9.fifo.reset();
@@ -271,23 +275,10 @@ pub const masks = struct {
     }
 };
 
-pub const nds7 = struct {
-    pub const IntEnable = extern union {
-        raw: u32,
-    };
-
-    pub const IntRequest = IntEnable;
-    pub const PostFlag = enum(u8) { in_progress = 0, completed };
-};
-
-pub const nds9 = struct {
-    pub const IntEnable = extern union {
-        raw: u32,
-    };
-
-    pub const IntRequest = IntEnable;
-
-    pub const PostFlag = enum(u8) { in_progress = 0, completed };
+// FIXME: bitfields depends on NDS9 / NDS7
+pub const IntEnable = extern union {
+    ipcsync: Bit(u32, 16),
+    raw: u32,
 };
 
 const Fifo = struct {

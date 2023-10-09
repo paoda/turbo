@@ -22,10 +22,16 @@ wram: *[64 * KiB]u8,
 vram: *Vram,
 io: io.Io,
 
+bios: *[16 * KiB]u8,
+
 pub fn init(allocator: Allocator, scheduler: *Scheduler, ctx: SharedCtx) !@This() {
     const wram = try allocator.create([64 * KiB]u8);
-    errdefer allocator.destroy(wram);
     @memset(wram, 0);
+    errdefer allocator.destroy(wram);
+
+    const bios = try allocator.create([16 * KiB]u8);
+    @memset(bios, 0);
+    errdefer allocator.destroy(bios);
 
     return .{
         .main = ctx.main,
@@ -34,11 +40,14 @@ pub fn init(allocator: Allocator, scheduler: *Scheduler, ctx: SharedCtx) !@This(
         .wram = wram,
         .scheduler = scheduler,
         .io = io.Io.init(ctx.io),
+
+        .bios = bios,
     };
 }
 
 pub fn deinit(self: *@This(), allocator: Allocator) void {
     allocator.destroy(self.wram);
+    allocator.destroy(self.bios);
 }
 
 pub fn reset(_: *@This()) void {}
@@ -64,12 +73,13 @@ fn _read(self: *@This(), comptime T: type, comptime mode: Mode, address: u32) T 
     }
 
     return switch (aligned_addr) {
+        0x0000_0000...0x01FF_FFFF => readInt(T, self.bios[address & 0x3FFF ..][0..byte_count]),
         0x0200_0000...0x02FF_FFFF => readInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count]),
         0x0300_0000...0x037F_FFFF => switch (self.io.shr.wramcnt.mode.read()) {
             0b00 => readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count]),
             else => self.shr_wram.read(T, .nds7, aligned_addr),
         },
-        0x0380_0000...0x0380_FFFF => readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count]),
+        0x0380_0000...0x03FF_FFFF => readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count]),
         0x0400_0000...0x04FF_FFFF => io.read(self, T, aligned_addr),
         0x0600_0000...0x06FF_FFFF => self.vram.read(T, .nds7, aligned_addr),
         else => warn("unexpected read: 0x{x:0>8} -> {}", .{ aligned_addr, T }),
@@ -97,6 +107,7 @@ fn _write(self: *@This(), comptime T: type, comptime mode: Mode, address: u32, v
     }
 
     switch (aligned_addr) {
+        0x0000_0000...0x01FF_FFFF => log.err("tried to read from NDS7 BIOS: 0x{X:0>8}", .{aligned_addr}),
         0x0200_0000...0x02FF_FFFF => writeInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count], value),
         0x0300_0000...0x037F_FFFF => switch (self.io.shr.wramcnt.mode.read()) {
             0b00 => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
