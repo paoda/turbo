@@ -115,11 +115,11 @@ const Ipc = struct {
 
     /// IPC Send FIFO
     /// Write-Only
-    pub fn send(self: *@This(), comptime src: Source, value: u32) !void {
+    pub fn send(self: *@This(), comptime src: Source, value: u32) void {
         switch (src) {
             .nds7 => {
                 if (!self._nds7.cnt.enable_fifos.read()) return;
-                try self._nds7.fifo.push(value);
+                self._nds7.fifo.push(value) catch unreachable; // see early return above
 
                 const not_empty_cache = !self._nds9.cnt.recv_fifo_empty.read();
 
@@ -143,7 +143,7 @@ const Ipc = struct {
             },
             .nds9 => {
                 if (!self._nds9.cnt.enable_fifos.read()) return;
-                try self._nds9.fifo.push(value);
+                self._nds9.fifo.push(value) catch unreachable; // see early return above
 
                 const not_empty_cache = !self._nds7.cnt.recv_fifo_empty.read();
 

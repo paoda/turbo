@@ -1,4 +1,5 @@
 const std = @import("std");
+const Log2Int = std.math.Log2Int;
 
 const assert = std.debug.assert;
 
@@ -101,4 +102,52 @@ test "FittingInt" {
     try std.testing.expect(FittingInt(0b11) == i2);
     try std.testing.expect(FittingInt(0b101) == i3);
     try std.testing.expect(FittingInt(0b1010) == i4);
+}
+
+/// TODO: Document this properly :)
+pub inline fn shift(comptime T: type, addr: u32) Log2Int(T) {
+    const offset: Log2Int(T) = @truncate(addr & (@sizeOf(T) - 1));
+
+    return offset << 3;
+}
+
+/// TODO: Document this properly :)
+pub inline fn subset(comptime T: type, comptime U: type, addr: u32, left: T, right: U) T {
+    const offset: Log2Int(T) = @truncate(addr & (@sizeOf(T) - 1));
+    const mask = @as(T, std.math.maxInt(U)) << (offset << 3);
+    const value = @as(T, right) << (offset << 3);
+
+    return (value & mask) | (left & ~mask);
+}
+
+test "subset" {
+    const expectEqual = std.testing.expectEqual;
+
+    try expectEqual(@as(u16, 0xABAA), subset(u16, u8, 0x0000_0000, 0xABCD, 0xAA));
+    try expectEqual(@as(u16, 0xAACD), subset(u16, u8, 0x0000_0001, 0xABCD, 0xAA));
+
+    try expectEqual(@as(u32, 0xDEAD_BEAA), subset(u32, u8, 0x0000_0000, 0xDEAD_BEEF, 0xAA));
+    try expectEqual(@as(u32, 0xDEAD_AAEF), subset(u32, u8, 0x0000_0001, 0xDEAD_BEEF, 0xAA));
+    try expectEqual(@as(u32, 0xDEAA_BEEF), subset(u32, u8, 0x0000_0002, 0xDEAD_BEEF, 0xAA));
+    try expectEqual(@as(u32, 0xAAAD_BEEF), subset(u32, u8, 0x0000_0003, 0xDEAD_BEEF, 0xAA));
+
+    try expectEqual(@as(u32, 0xDEAD_AAAA), subset(u32, u16, 0x0000_0000, 0xDEAD_BEEF, 0xAAAA));
+    try expectEqual(@as(u32, 0xAAAA_BEEF), subset(u32, u16, 0x0000_0002, 0xDEAD_BEEF, 0xAAAA));
+
+    try expectEqual(@as(u64, 0xBAAD_F00D_DEAD_CAAA), subset(u64, u8, 0x0000_0000, 0xBAAD_F00D_DEAD_CAFE, 0xAA));
+    try expectEqual(@as(u64, 0xBAAD_F00D_DEAD_AAFE), subset(u64, u8, 0x0000_0001, 0xBAAD_F00D_DEAD_CAFE, 0xAA));
+    try expectEqual(@as(u64, 0xBAAD_F00D_DEAA_CAFE), subset(u64, u8, 0x0000_0002, 0xBAAD_F00D_DEAD_CAFE, 0xAA));
+    try expectEqual(@as(u64, 0xBAAD_F00D_AAAD_CAFE), subset(u64, u8, 0x0000_0003, 0xBAAD_F00D_DEAD_CAFE, 0xAA));
+    try expectEqual(@as(u64, 0xBAAD_F0AA_DEAD_CAFE), subset(u64, u8, 0x0000_0004, 0xBAAD_F00D_DEAD_CAFE, 0xAA));
+    try expectEqual(@as(u64, 0xBAAD_AA0D_DEAD_CAFE), subset(u64, u8, 0x0000_0005, 0xBAAD_F00D_DEAD_CAFE, 0xAA));
+    try expectEqual(@as(u64, 0xBAAA_F00D_DEAD_CAFE), subset(u64, u8, 0x0000_0006, 0xBAAD_F00D_DEAD_CAFE, 0xAA));
+    try expectEqual(@as(u64, 0xAAAD_F00D_DEAD_CAFE), subset(u64, u8, 0x0000_0007, 0xBAAD_F00D_DEAD_CAFE, 0xAA));
+
+    try expectEqual(@as(u64, 0xBAAD_F00D_DEAD_AAAA), subset(u64, u16, 0x0000_0000, 0xBAAD_F00D_DEAD_CAFE, 0xAAAA));
+    try expectEqual(@as(u64, 0xBAAD_F00D_AAAA_CAFE), subset(u64, u16, 0x0000_0002, 0xBAAD_F00D_DEAD_CAFE, 0xAAAA));
+    try expectEqual(@as(u64, 0xBAAD_AAAA_DEAD_CAFE), subset(u64, u16, 0x0000_0004, 0xBAAD_F00D_DEAD_CAFE, 0xAAAA));
+    try expectEqual(@as(u64, 0xAAAA_F00D_DEAD_CAFE), subset(u64, u16, 0x0000_0006, 0xBAAD_F00D_DEAD_CAFE, 0xAAAA));
+
+    try expectEqual(@as(u64, 0xBAAD_F00D_AAAA_AAAA), subset(u64, u32, 0x0000_0000, 0xBAAD_F00D_DEAD_CAFE, 0xAAAA_AAAA));
+    try expectEqual(@as(u64, 0xAAAA_AAAA_DEAD_CAFE), subset(u64, u32, 0x0000_0004, 0xBAAD_F00D_DEAD_CAFE, 0xAAAA_AAAA));
 }

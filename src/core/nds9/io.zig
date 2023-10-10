@@ -11,6 +11,7 @@ const IntEnable = @import("../io.zig").IntEnable;
 const IntRequest = @import("../io.zig").IntEnable;
 
 const sext = @import("../../util.zig").sext;
+const shift = @import("../../util.zig").shift;
 
 const log = std.log.scoped(.nds9_io);
 
@@ -52,15 +53,16 @@ pub const Io = struct {
 pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
     return switch (T) {
         u32 => switch (address) {
+            0x0400_0180 => bus.io.shr.ipc._nds9.sync.raw,
             0x0400_0208 => @intFromBool(bus.io.ime),
             0x0400_0210 => bus.io.ie.raw,
             0x0400_0214 => bus.io.irq.raw,
 
-            0x0400_02A0 => @truncate(bus.io.div.result),
-            0x0400_02A4 => @truncate(bus.io.div.result >> 32),
-            0x0400_02A8 => @truncate(bus.io.div.remainder),
-            0x0400_02AC => @truncate(bus.io.div.remainder >> 32),
+            0x0400_02A0, 0x0400_02A4 => @truncate(bus.io.div.result >> shift(u64, address)),
+            0x0400_02A8, 0x0400_02AC => @truncate(bus.io.div.remainder >> shift(u64, address)),
             0x0400_02B4 => @truncate(bus.io.sqrt.result),
+
+            0x0400_4008 => 0x0000_0000, // Lets software know this is NOT a DSi
 
             0x0410_0000 => bus.io.shr.ipc.recv(.nds9),
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
@@ -78,11 +80,14 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u8 => switch (address) {
+            0x0400_4000 => 0x00, // Lets software know this is NOT a DSi
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         else => @compileError(T ++ " is an unsupported bus read type"),
     };
 }
+
+const subset = @import("../../util.zig").subset;
 
 pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
     switch (T) {
@@ -90,7 +95,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0000 => bus.ppu.io.dispcnt_a.raw = value,
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds9, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds9, value),
-            0x0400_0188 => bus.io.shr.ipc.send(.nds9, value) catch |e| std.debug.panic("IPC FIFO Error: {}", .{e}),
+            0x0400_0188 => bus.io.shr.ipc.send(.nds9, value),
 
             0x0400_0240 => {
                 bus.ppu.vram.io.cnt_a.raw = @truncate(value >> 0); // 0x0400_0240
@@ -103,28 +108,18 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0210 => bus.io.ie.raw = value,
             0x0400_0214 => bus.io.irq.raw &= ~value,
 
-            0x0400_0290 => {
-                bus.io.div.numerator = masks.mask(bus.io.div.numerator, value, 0xFFFF_FFFF);
+            0x0400_0290, 0x0400_0294 => {
+                bus.io.div.numerator = subset(u64, u32, address, bus.io.div.numerator, value);
                 bus.io.div.schedule(bus.scheduler);
             },
-            0x0400_0294 => {
-                bus.io.div.numerator = masks.mask(bus.io.div.numerator, @as(u64, value) << 32, 0xFFFF_FFFF << 32);
+
+            0x0400_0298, 0x0400_029C => {
+                bus.io.div.denominator = subset(u64, u32, address, bus.io.div.denominator, value);
                 bus.io.div.schedule(bus.scheduler);
             },
-            0x0400_0298 => {
-                bus.io.div.denominator = masks.mask(bus.io.div.denominator, value, 0xFFFF_FFFF);
-                bus.io.div.schedule(bus.scheduler);
-            },
-            0x0400_029C => {
-                bus.io.div.denominator = masks.mask(bus.io.div.denominator, @as(u64, value) << 32, 0xFFFF_FFFF << 32);
-                bus.io.div.schedule(bus.scheduler);
-            },
-            0x0400_02B8 => {
-                bus.io.sqrt.param = masks.mask(bus.io.sqrt.param, value, 0xFFFF_FFFF);
-                bus.io.sqrt.schedule(bus.scheduler);
-            },
-            0x0400_02BC => {
-                bus.io.sqrt.param = masks.mask(bus.io.sqrt.param, @as(u64, value) << 32, 0xFFFF_FFFF << 32);
+
+            0x0400_02B8, 0x0400_02BC => {
+                bus.io.sqrt.param = subset(u64, u32, address, bus.io.sqrt.param, value);
                 bus.io.sqrt.schedule(bus.scheduler);
             },
 
@@ -146,6 +141,8 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
                 bus.io.sqrt.cnt.raw = value;
                 bus.io.sqrt.schedule(bus.scheduler);
             },
+
+            0x0400_0304 => bus.io.powcnt.raw = value,
 
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
@@ -205,10 +202,10 @@ fn warn(comptime format: []const u8, args: anytype) u0 {
 const PowCnt = extern union {
     // Enable flag for both LCDs
     lcd: Bit(u32, 0),
-    gfx_2da: Bit(u32, 1),
-    render_3d: Bit(u32, 2),
-    geometry_3d: Bit(u32, 3),
-    gfx_2db: Bit(u32, 9),
+    engine2d_a: Bit(u32, 1),
+    render3d: Bit(u32, 2),
+    geometry3d: Bit(u32, 3),
+    engine2d_b: Bit(u32, 9),
     display_swap: Bit(u32, 15),
     raw: u32,
 };
