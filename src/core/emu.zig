@@ -75,7 +75,7 @@ pub fn loadFirm(allocator: Allocator, system: System, firm_path: []const u8) !vo
         const buf = try file.readToEndAlloc(allocator, try file.getEndPos());
         defer allocator.free(buf);
 
-        @memcpy(system.bus7.bios[0..buf.len], buf);
+        try system.bus7.bios.load(allocator, buf);
     }
 
     { // NDS9 BIOS
@@ -90,7 +90,7 @@ pub fn loadFirm(allocator: Allocator, system: System, firm_path: []const u8) !vo
         const buf = try file.readToEndAlloc(allocator, try file.getEndPos());
         defer allocator.free(buf);
 
-        @memcpy(system.bus9.bios[0..buf.len], buf);
+        try system.bus9.bios.load(allocator, buf);
     }
 }
 

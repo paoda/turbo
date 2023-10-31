@@ -5,6 +5,7 @@ const Scheduler = @import("../Scheduler.zig");
 const SharedCtx = @import("../emu.zig").SharedCtx;
 const Wram = @import("../emu.zig").Wram;
 const Vram = @import("../ppu.zig").Vram;
+const Bios = @import("Bios.zig");
 const forceAlign = @import("../emu.zig").forceAlign;
 
 const Allocator = std.mem.Allocator;
@@ -20,18 +21,13 @@ main: *[4 * MiB]u8,
 shr_wram: *Wram,
 wram: *[64 * KiB]u8,
 vram: *Vram,
-io: io.Io,
 
-bios: *[16 * KiB]u8,
+io: io.Io,
+bios: Bios,
 
 pub fn init(allocator: Allocator, scheduler: *Scheduler, ctx: SharedCtx) !@This() {
     const wram = try allocator.create([64 * KiB]u8);
     @memset(wram, 0);
-    errdefer allocator.destroy(wram);
-
-    const bios = try allocator.create([16 * KiB]u8);
-    @memset(bios, 0);
-    errdefer allocator.destroy(bios);
 
     return .{
         .main = ctx.main,
@@ -41,13 +37,13 @@ pub fn init(allocator: Allocator, scheduler: *Scheduler, ctx: SharedCtx) !@This(
         .scheduler = scheduler,
         .io = io.Io.init(ctx.io),
 
-        .bios = bios,
+        .bios = .{},
     };
 }
 
 pub fn deinit(self: *@This(), allocator: Allocator) void {
     allocator.destroy(self.wram);
-    allocator.destroy(self.bios);
+    self.bios.deinit(allocator);
 }
 
 pub fn reset(_: *@This()) void {}
@@ -73,7 +69,7 @@ fn _read(self: *@This(), comptime T: type, comptime mode: Mode, address: u32) T 
     }
 
     return switch (aligned_addr) {
-        0x0000_0000...0x01FF_FFFF => readInt(T, self.bios[address & 0x3FFF ..][0..byte_count]),
+        0x0000_0000...0x01FF_FFFF => self.bios.read(T, address),
         0x0200_0000...0x02FF_FFFF => readInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count]),
         0x0300_0000...0x037F_FFFF => switch (self.io.shr.wramcnt.mode.read()) {
             0b00 => readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count]),
@@ -107,7 +103,7 @@ fn _write(self: *@This(), comptime T: type, comptime mode: Mode, address: u32, v
     }
 
     switch (aligned_addr) {
-        0x0000_0000...0x01FF_FFFF => log.err("tried to read from NDS7 BIOS: 0x{X:0>8}", .{aligned_addr}),
+        0x0000_0000...0x01FF_FFFF => self.bios.write(T, address, value),
         0x0200_0000...0x02FF_FFFF => writeInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count], value),
         0x0300_0000...0x037F_FFFF => switch (self.io.shr.wramcnt.mode.read()) {
             0b00 => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
