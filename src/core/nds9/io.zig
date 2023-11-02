@@ -144,7 +144,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             0x0400_0304 => bus.io.powcnt.raw = value,
 
-            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
+            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>4})", .{ T, address, value }),
         },
         u8 => switch (address) {
             0x0400_0240 => {
@@ -188,7 +188,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
                 bus.ppu.vram.update();
             },
 
-            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
+            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>2})", .{ T, address, value }),
         },
         else => @compileError(T ++ " is an unsupported bus write type"),
     }

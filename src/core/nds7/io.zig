@@ -113,7 +113,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds7, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds7, value),
-            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
+            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>4})", .{ T, address, value }),
         },
         u8 => switch (address) {
             // DMA Transfers
@@ -123,7 +123,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0100...0x0400_010F => log.warn("TODO: Implement Timer", .{}),
 
             0x0400_0208 => bus.io.ime = value & 1 == 1,
-            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
+            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>2})", .{ T, address, value }),
         },
         else => @compileError(T ++ " is an unsupported bus write type"),
     }

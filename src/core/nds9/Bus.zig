@@ -74,7 +74,7 @@ fn _read(self: *@This(), comptime T: type, comptime mode: Mode, address: u32) T 
         0x0400_0000...0x04FF_FFFF => io.read(self, T, aligned_addr),
         0x0600_0000...0x06FF_FFFF => self.ppu.vram.read(T, .nds9, aligned_addr),
         0xFFFF_0000...0xFFFF_FFFF => self.bios.read(T, address),
-        else => warn("unexpected read: 0x{x:0>8} -> {}", .{ aligned_addr, T }),
+        else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
     };
 }
 
@@ -104,7 +104,7 @@ fn _write(self: *@This(), comptime T: type, comptime mode: Mode, address: u32, v
         0x0400_0000...0x04FF_FFFF => io.write(self, T, aligned_addr, value),
         0x0600_0000...0x06FF_FFFF => self.ppu.vram.write(T, .nds9, aligned_addr, value),
         0xFFFF_0000...0xFFFF_FFFF => self.bios.write(T, address, value),
-        else => log.warn("unexpected write: 0x{X:}{} -> 0x{X:0>8}", .{ value, T, aligned_addr }),
+        else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
     }
 }
 
