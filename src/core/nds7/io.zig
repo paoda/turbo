@@ -46,10 +46,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
     return switch (T) {
         u32 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DC => warn("TODO: Implement DMA", .{}),
+            0x0400_00B0...0x0400_00DC => warn("TODO: impl DMA", .{}),
 
             // Timers
-            0x0400_0100...0x0400_010C => warn("TODO: Implement Timer", .{}),
+            0x0400_0100...0x0400_010C => warn("TODO: impl timer", .{}),
 
             0x0400_0180 => bus.io.shr.ipc._nds7.sync.raw,
             0x0400_0208 => @intFromBool(bus.io.ime),
@@ -61,10 +61,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
         },
         u16 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DE => warn("TODO: Implement DMA", .{}),
+            0x0400_00B0...0x0400_00DE => warn("TODO: impl DMA", .{}),
 
             // Timers
-            0x0400_0100...0x0400_010E => warn("TODO: Implement Timer", .{}),
+            0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
 
             0x0400_0180 => @truncate(bus.io.shr.ipc._nds7.sync.raw),
             0x0400_0184 => @truncate(bus.io.shr.ipc._nds7.cnt.raw),
@@ -72,10 +72,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
         },
         u8 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DF => warn("TODO: Implement DMA", .{}),
+            0x0400_00B0...0x0400_00DF => warn("TODO: impl DMA", .{}),
 
             // Timers
-            0x0400_0100...0x0400_010F => warn("TODO: Implement Timer", .{}),
+            0x0400_0100...0x0400_010F => warn("TODO: impl timer", .{}),
 
             0x0400_0240 => bus.vram.stat().raw,
             0x0400_0241 => bus.io.shr.wramcnt.raw,
@@ -91,10 +91,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
     switch (T) {
         u32 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DC => log.warn("TODO: Implement DMA", .{}),
+            0x0400_00B0...0x0400_00DC => log.warn("TODO: impl DMA", .{}),
 
             // Timers
-            0x0400_0100...0x0400_010C => log.warn("TODO: Implement Timer", .{}),
+            0x0400_0100...0x0400_010C => log.warn("TODO: impl timer", .{}),
 
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds7, value),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
@@ -106,10 +106,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
         },
         u16 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DE => log.warn("TODO: Implement DMA", .{}),
+            0x0400_00B0...0x0400_00DE => log.warn("TODO: impl DMA", .{}),
 
             // Timers
-            0x0400_0100...0x0400_010E => log.warn("TODO: Implement Timer", .{}),
+            0x0400_0100...0x0400_010E => log.warn("TODO: impl timer", .{}),
 
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds7, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds7, value),
@@ -117,10 +117,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
         },
         u8 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DF => log.warn("TODO: Implement DMA", .{}),
+            0x0400_00B0...0x0400_00DF => log.warn("TODO: impl DMA", .{}),
 
             // Timers
-            0x0400_0100...0x0400_010F => log.warn("TODO: Implement Timer", .{}),
+            0x0400_0100...0x0400_010F => log.warn("TODO: impl timer", .{}),
 
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>2})", .{ T, address, value }),

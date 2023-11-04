@@ -53,6 +53,13 @@ pub const Io = struct {
 pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
     return switch (T) {
         u32 => switch (address) {
+            // DMA Transfers
+            0x0400_00B0...0x0400_00DC => warn("TODO: impl DMA", .{}),
+            0x0400_00E0...0x0400_00EC => warn("TODO: impl DMA fill", .{}),
+
+            // Timers
+            0x0400_0100...0x0400_010C => warn("TODO: impl timer", .{}),
+
             0x0400_0180 => bus.io.shr.ipc._nds9.sync.raw,
             0x0400_0208 => @intFromBool(bus.io.ime),
             0x0400_0210 => bus.io.ie.raw,
@@ -68,6 +75,13 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u16 => switch (address) {
+            // DMA Transfers
+            0x0400_00B0...0x0400_00DE => warn("TODO: impl DMA", .{}),
+            0x0400_00E0...0x0400_00EE => warn("TODO: impl DMA fill", .{}),
+
+            // Timers
+            0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
+
             0x0400_0004 => bus.ppu.io.dispstat.raw,
             0x0400_0130 => bus.io.keyinput.load(.Monotonic),
 
@@ -80,6 +94,13 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u8 => switch (address) {
+            // DMA Transfers
+            0x0400_00B0...0x0400_00DF => warn("TODO: impl DMA", .{}),
+            0x0400_00E0...0x0400_00EF => warn("TODO: impl DMA fill", .{}),
+
+            // Timers
+            0x0400_0100...0x0400_010F => warn("TODO: impl timer", .{}),
+
             0x0400_4000 => 0x00, // Lets software know this is NOT a DSi
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
@@ -92,6 +113,13 @@ const subset = @import("../../util.zig").subset;
 pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
     switch (T) {
         u32 => switch (address) {
+            // DMA Transfers
+            0x0400_00B0...0x0400_00DC => log.warn("TODO: impl DMA", .{}),
+            0x0400_00E0...0x0400_00EC => log.warn("TODO: impl DMA fill", .{}),
+
+            // Timers
+            0x0400_0100...0x0400_010C => log.warn("TODO: impl timer", .{}),
+
             0x0400_0000 => bus.ppu.io.dispcnt_a.raw = value,
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds9, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds9, value),
@@ -128,6 +156,13 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
         u16 => switch (address) {
+            // DMA Transfers
+            0x0400_00B0...0x0400_00DE => log.warn("TODO: impl DMA", .{}),
+            0x0400_00E0...0x0400_00EE => log.warn("TODO: impl DMA fill", .{}),
+
+            // Timers
+            0x0400_0100...0x0400_010E => log.warn("TODO: impl timer", .{}),
+
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds9, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds9, value),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
@@ -147,6 +182,13 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>4})", .{ T, address, value }),
         },
         u8 => switch (address) {
+            // DMA Transfers
+            0x0400_00B0...0x0400_00DF => log.warn("TODO: impl DMA", .{}),
+            0x0400_00E0...0x0400_00EF => log.warn("TODO: impl DMA fill", .{}),
+
+            // Timers
+            0x0400_0100...0x0400_010F => log.warn("TODO: impl timer", .{}),
+
             0x0400_0240 => {
                 bus.ppu.vram.io.cnt_a.raw = value;
                 bus.ppu.vram.update();
