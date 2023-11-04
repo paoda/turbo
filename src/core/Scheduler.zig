@@ -66,7 +66,7 @@ pub fn handle(self: *@This(), bus_ptr: ?*anyopaque, event: Event, late: u64) voi
                     bus.ppu.onHdrawEnd(self, late);
                 },
                 .hblank => bus.ppu.onHblankEnd(self, late),
-                .vblank => bus.ppu.onHblankEnd(self, late),
+                .vblank => bus.ppu.onVblankEnd(self, late),
                 .sqrt => bus.io.sqrt.onSqrtCalc(),
                 .div => bus.io.div.onDivCalc(),
             }

@@ -132,7 +132,7 @@ pub const SharedCtx = struct {
     const KiB = 0x400;
 
     pub const Io = @import("io.zig").Io;
-    const Vram = @import("ppu.zig").Vram;
+    const Vram = @import("ppu/Vram.zig");
 
     io: *Io,
     main: *[4 * MiB]u8,

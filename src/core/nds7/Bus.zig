@@ -4,7 +4,7 @@ const io = @import("io.zig");
 const Scheduler = @import("../Scheduler.zig");
 const SharedCtx = @import("../emu.zig").SharedCtx;
 const Wram = @import("../emu.zig").Wram;
-const Vram = @import("../ppu.zig").Vram;
+const Vram = @import("../ppu/Vram.zig");
 const Bios = @import("Bios.zig");
 const forceAlign = @import("../emu.zig").forceAlign;
 

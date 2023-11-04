@@ -2,7 +2,7 @@ const std = @import("std");
 
 const log = std.log.scoped(.cp15);
 
-const panic_on_unimplemented: bool = true;
+const panic_on_unimplemented: bool = false;
 
 control: u32 = 0x0005_2078,
 dtcm_size_base: u32 = 0x0300_000A,

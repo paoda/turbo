@@ -34,10 +34,6 @@ pub const Io = struct {
     /// Caller must cast the `u32` to either `nds7.IntRequest` or `nds9.IntRequest`
     irq: IntRequest = .{ .raw = 0x0000_0000 },
 
-    /// POWCNT1 - Graphics Power Control
-    /// Read / Write
-    powcnt: PowCnt = .{ .raw = 0x0000_0000 },
-
     // Read Only
     keyinput: AtomicKeyInput = .{},
 
@@ -82,7 +78,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             // Timers
             0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
 
-            0x0400_0004 => bus.ppu.io.dispstat.raw,
+            0x0400_0004 => bus.ppu.engines[0].dispstat.raw,
             0x0400_0130 => bus.io.keyinput.load(.Monotonic),
 
             0x0400_0180 => @truncate(bus.io.shr.ipc._nds9.sync.raw),
@@ -120,7 +116,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             // Timers
             0x0400_0100...0x0400_010C => log.warn("TODO: impl timer", .{}),
 
-            0x0400_0000 => bus.ppu.io.dispcnt_a.raw = value,
+            0x0400_0000 => bus.ppu.engines[0].dispcnt.raw = value,
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds9, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds9, value),
             0x0400_0188 => bus.io.shr.ipc.send(.nds9, value),
@@ -151,7 +147,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
                 bus.io.sqrt.schedule(bus.scheduler);
             },
 
-            0x0400_0304 => bus.io.powcnt.raw = value,
+            0x0400_0304 => bus.ppu.io.powcnt.raw = value,
 
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
@@ -177,7 +173,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
                 bus.io.sqrt.schedule(bus.scheduler);
             },
 
-            0x0400_0304 => bus.io.powcnt.raw = value,
+            0x0400_0304 => bus.ppu.io.powcnt.raw = value,
 
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>4})", .{ T, address, value }),
         },
@@ -241,7 +237,7 @@ fn warn(comptime format: []const u8, args: anytype) u0 {
     return 0;
 }
 
-const PowCnt = extern union {
+pub const PowCnt = extern union {
     // Enable flag for both LCDs
     lcd: Bit(u32, 0),
     engine2d_a: Bit(u32, 1),
@@ -382,8 +378,7 @@ const SquareRootUnit = struct {
 };
 
 pub const DispcntA = extern union {
-    bg_mode: Bitfield(u32, 0, 2),
-
+    bg_mode: Bitfield(u32, 0, 3),
     /// toggle between 2D and 3D for BG0
     bg0_dimension: Bit(u32, 3),
     tile_obj_mapping: Bit(u32, 4),
@@ -400,7 +395,25 @@ pub const DispcntA = extern union {
     bitmap_obj_1d_boundary: Bit(u32, 22),
     obj_during_hblank: Bit(u32, 23),
     character_base: Bitfield(u32, 24, 3),
-    screen_base: Bitfield(u32, 27, 2),
+    screen_base: Bitfield(u32, 27, 3),
+    bg_ext_pal_enable: Bit(u32, 30),
+    obj_ext_pal_enable: Bit(u32, 31),
+    raw: u32,
+};
+
+pub const DispcntB = extern union {
+    bg_mode: Bitfield(u32, 0, 3),
+    tile_obj_mapping: Bit(u32, 4),
+    bitmap_obj_2d_dimension: Bit(u32, 5),
+    bitmap_obj_mapping: Bit(u32, 6),
+    forced_blank: Bit(u32, 7),
+    bg_enable: Bitfield(u32, 8, 4),
+    obj_enable: Bit(u32, 12),
+    win_enable: Bitfield(u32, 13, 2),
+    obj_win_enable: Bit(u32, 15),
+    display_mode: Bitfield(u32, 16, 2),
+    tile_obj_1d_boundary: Bitfield(u32, 20, 2),
+    obj_during_hblank: Bit(u32, 23),
     bg_ext_pal_enable: Bit(u32, 30),
     obj_ext_pal_enable: Bit(u32, 31),
     raw: u32,
