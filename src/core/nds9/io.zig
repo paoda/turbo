@@ -78,7 +78,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             // Timers
             0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
 
-            0x0400_0004 => bus.ppu.engines[0].dispstat.raw,
+            0x0400_0004 => bus.ppu.io.nds9.dispstat.raw,
             0x0400_0130 => bus.io.keyinput.load(.Monotonic),
 
             0x0400_0180 => @truncate(bus.io.shr.ipc._nds9.sync.raw),

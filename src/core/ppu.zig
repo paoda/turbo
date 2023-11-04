@@ -23,10 +23,20 @@ pub const Ppu = struct {
 
     io: Io = .{},
 
-    const Io = struct {
-        const types = @import("nds9/io.zig");
+    pub const Io = struct {
+        const ty = @import("nds9/io.zig");
 
-        powcnt: types.PowCnt = .{ .raw = 0x0000_0000 },
+        nds9: struct {
+            dispstat: ty.Dispstat = .{ .raw = 0x0000_0000 },
+            vcount: ty.Vcount = .{ .raw = 0x0000_0000 },
+        } = .{},
+
+        nds7: struct {
+            dispstat: ty.Dispstat = .{ .raw = 0x0000_0000 },
+            vcount: ty.Vcount = .{ .raw = 0x0000_0000 },
+        } = .{},
+
+        powcnt: ty.PowCnt = .{ .raw = 0x0000_0000 },
     };
 
     pub fn init(allocator: Allocator, vram: *Vram) !@This() {
@@ -42,22 +52,21 @@ pub const Ppu = struct {
 
     pub fn drawScanline(self: *@This(), bus: *System.Bus9) void {
         if (self.io.powcnt.engine2d_a.read())
-            self.engines[0].drawScanline(bus, &self.fb, &self.io.powcnt);
+            self.engines[0].drawScanline(bus, &self.fb, &self.io);
 
         if (self.io.powcnt.engine2d_b.read())
-            self.engines[1].drawScanline(bus, &self.fb, &self.io.powcnt);
+            self.engines[1].drawScanline(bus, &self.fb, &self.io);
     }
 
     /// HDraw -> HBlank
     pub fn onHdrawEnd(self: *@This(), scheduler: *Scheduler, late: u64) void {
-        inline for (&self.engines) |*engine| {
-            std.debug.assert(engine.dispstat.hblank.read() == false);
-            std.debug.assert(engine.dispstat.vblank.read() == false);
+        std.debug.assert(self.io.nds9.dispstat.hblank.read() == false);
+        std.debug.assert(self.io.nds9.dispstat.vblank.read() == false);
 
-            // TODO: Signal HBlank IRQ
+        self.io.nds9.dispstat.hblank.set();
+        self.io.nds7.dispstat.hblank.set();
 
-            engine.dispstat.hblank.set();
-        }
+        // TODO: Signal HBlank IRQ
 
         const dots_in_hblank = 99;
         scheduler.push(.{ .nds9 = .hblank }, dots_in_hblank * cycles_per_dot -| late);
@@ -65,14 +74,13 @@ pub const Ppu = struct {
 
     // VBlank -> HBlank (Still VBlank)
     pub fn onVblankEnd(self: *@This(), scheduler: *Scheduler, late: u64) void {
-        inline for (&self.engines) |*engine| {
-            std.debug.assert(!engine.dispstat.hblank.read());
-            std.debug.assert(engine.vcount.scanline.read() == 262 or engine.dispstat.vblank.read());
+        std.debug.assert(!self.io.nds9.dispstat.hblank.read());
+        std.debug.assert(self.io.nds9.vcount.scanline.read() == 262 or self.io.nds9.dispstat.vblank.read());
 
-            // TODO: Signal HBlank IRQ
+        self.io.nds9.dispstat.hblank.set();
+        self.io.nds7.dispstat.hblank.set();
 
-            engine.dispstat.hblank.set();
-        }
+        // TODO: Signal HBlank IRQ
 
         const dots_in_hblank = 99;
         scheduler.push(.{ .nds9 = .hblank }, dots_in_hblank * cycles_per_dot -| late);
@@ -82,28 +90,29 @@ pub const Ppu = struct {
     pub fn onHblankEnd(self: *@This(), scheduler: *Scheduler, late: u64) void {
         const scanline_total = 263; // 192 visible, 71 blanking
 
-        std.debug.assert(self.engines[0].vcount.scanline.read() == self.engines[1].vcount.scanline.read());
+        const prev_scanline = self.io.nds9.vcount.scanline.read();
+        const scanline = (prev_scanline + 1) % scanline_total;
 
-        inline for (&self.engines) |*engine| {
-            const prev_scanline = engine.vcount.scanline.read();
-            const scanline = (prev_scanline + 1) % scanline_total;
+        self.io.nds9.vcount.scanline.write(scanline);
+        self.io.nds7.vcount.scanline.write(scanline);
 
-            engine.vcount.scanline.write(scanline);
-            engine.dispstat.hblank.unset();
+        self.io.nds9.dispstat.hblank.unset();
+        self.io.nds7.dispstat.hblank.unset();
 
-            const coincidence = scanline == engine.dispstat.lyc.read();
-            engine.dispstat.coincidence.write(coincidence);
+        {
+            const coincidence = scanline == self.io.nds9.dispstat.lyc.read();
+            self.io.nds9.dispstat.coincidence.write(coincidence);
         }
-
-        const scanline = self.engines[0].vcount.scanline.read();
+        {
+            const coincidence = scanline == self.io.nds7.dispstat.lyc.read();
+            self.io.nds7.dispstat.coincidence.write(coincidence);
+        }
 
         // TODO: LYC == LY IRQ
 
         if (scanline < 192) {
-            inline for (&self.engines) |*engine| {
-                std.debug.assert(engine.dispstat.vblank.read() == false);
-                std.debug.assert(engine.dispstat.hblank.read() == false);
-            }
+            std.debug.assert(self.io.nds9.dispstat.vblank.read() == false);
+            std.debug.assert(self.io.nds9.dispstat.hblank.read() == false);
 
             // Draw Another Scanline
             const dots_in_hdraw = 256;
@@ -114,17 +123,17 @@ pub const Ppu = struct {
             // Transition from Hblank to Vblank
             self.fb.swap();
 
-            inline for (&self.engines) |*engine|
-                engine.dispstat.vblank.set();
+            self.io.nds9.dispstat.vblank.set();
+            self.io.nds7.dispstat.vblank.set();
 
             // TODO: Signal VBlank IRQ
         }
 
         if (scanline == 262) {
-            inline for (&self.engines) |*engine| {
-                engine.dispstat.vblank.unset();
-                std.debug.assert(engine.dispstat.vblank.read() == (scanline != 262));
-            }
+            self.io.nds9.dispstat.vblank.unset();
+            self.io.nds7.dispstat.vblank.unset();
+
+            std.debug.assert(self.io.nds9.dispstat.vblank.read() == (scanline != 262));
         }
 
         const dots_in_vblank = 256;

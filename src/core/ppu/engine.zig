@@ -6,10 +6,7 @@ const FrameBuffer = @import("../ppu.zig").FrameBuffer;
 const DispcntA = @import("../nds9/io.zig").DispcntA;
 const DispcntB = @import("../nds9/io.zig").DispcntB;
 
-const Dispstat = @import("../nds9/io.zig").Dispstat;
-const Vcount = @import("../nds9/io.zig").Vcount;
-
-const PowCnt = @import("../nds9/io.zig").PowCnt;
+const Ppu = @import("../ppu.zig").Ppu;
 
 const width = @import("../ppu.zig").screen_width;
 const height = @import("../ppu.zig").screen_height;
@@ -32,17 +29,15 @@ fn Engine(comptime kind: EngineKind) type {
 
     return struct {
         dispcnt: Type(DispcntA, DispcntB) = .{ .raw = 0x0000_0000 },
-        dispstat: Dispstat = .{ .raw = 0x0000_0000 },
-        vcount: Vcount = .{ .raw = 0x0000_0000 },
 
-        pub fn drawScanline(self: *@This(), bus: *Bus, fb: *FrameBuffer, powcnt: *PowCnt) void {
+        pub fn drawScanline(self: *@This(), bus: *Bus, fb: *FrameBuffer, io: *Ppu.Io) void {
             const disp_mode = self.dispcnt.display_mode.read();
 
             switch (disp_mode) {
                 0 => { // Display Off
                     const buf = switch (kind) {
-                        .a => if (powcnt.display_swap.read()) fb.top(.back) else fb.btm(.back),
-                        .b => if (powcnt.display_swap.read()) fb.btm(.back) else fb.top(.back),
+                        .a => if (io.powcnt.display_swap.read()) fb.top(.back) else fb.btm(.back),
+                        .b => if (io.powcnt.display_swap.read()) fb.btm(.back) else fb.top(.back),
                     };
 
                     @memset(buf, 0xFF); // set everything to white
@@ -52,8 +47,8 @@ fn Engine(comptime kind: EngineKind) type {
                     if (kind == .b) return;
                     // TODO: Master Brightness can still affect this mode
 
-                    const scanline: u32 = self.vcount.scanline.read();
-                    const buf = if (powcnt.display_swap.read()) fb.top(.back) else fb.btm(.back);
+                    const scanline: u32 = io.nds9.vcount.scanline.read();
+                    const buf = if (io.powcnt.display_swap.read()) fb.top(.back) else fb.btm(.back);
 
                     const scanline_buf = blk: {
                         const rgba_ptr: *[width * height]u32 = @ptrCast(@alignCast(buf));
