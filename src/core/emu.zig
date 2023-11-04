@@ -107,9 +107,18 @@ pub fn runFrame(scheduler: *Scheduler, system: System) void {
     const frame_end = scheduler.tick + cycles_per_frame;
 
     while (scheduler.tick < frame_end) {
-        system.arm7tdmi.step();
-        system.arm946es.step();
-        system.arm946es.step();
+        switch (isHalted(system)) {
+            .both => scheduler.tick = scheduler.peekTimestamp(),
+            inline else => |halt| {
+                if (comptime halt != .arm9) {
+                    system.arm946es.step();
+                    system.arm946es.step();
+                }
+
+                if (comptime halt != .arm7)
+                    system.arm7tdmi.step();
+            },
+        }
 
         if (scheduler.check()) |ev| {
             const late = scheduler.tick - ev.tick;
@@ -124,6 +133,18 @@ pub fn runFrame(scheduler: *Scheduler, system: System) void {
             scheduler.handle(bus_ptr, ev, late);
         }
     }
+}
+
+const Halted = enum { arm7, arm9, both, none };
+
+inline fn isHalted(system: System) Halted {
+    const ret = [_]Halted{ .none, .arm7, .arm9, .both };
+    const nds7_bus: *System.Bus7 = @ptrCast(@alignCast(system.arm7tdmi.bus.ptr));
+
+    const nds9_halt: u2 = @intFromBool(system.cp15.wait_for_interrupt);
+    const nds7_halt: u2 = @intFromBool(nds7_bus.io.haltcnt == .halt);
+
+    return ret[(nds9_halt << 1) | nds7_halt];
 }
 
 // FIXME: Perf win to allocating on the stack instead?
@@ -320,8 +341,13 @@ pub fn handleInterrupt(comptime dev: Wram.Device, cpu: if (dev == .nds9) *System
     if (!bus_ptr.io.ime or cpu.cpsr.i.read()) return; // ensure irqs are enabled
     if ((bus_ptr.io.ie.raw & bus_ptr.io.irq.raw) == 0) return; // ensure there is an irq to handle
 
-    // TODO: Handle HALT
-    // HALTCNG (NDS7) and CP15 (NDS9)
+    switch (dev) {
+        .nds9 => {
+            const cp15: *System.Cp15 = @ptrCast(@alignCast(cpu.cp15.ptr));
+            cp15.wait_for_interrupt = false;
+        },
+        .nds7 => bus_ptr.io.haltcnt = .execute,
+    }
 
     const ret_addr = cpu.r[15] - if (cpu.cpsr.t.read()) 0 else @as(u32, 4);
     const spsr = cpu.cpsr;

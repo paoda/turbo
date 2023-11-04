@@ -8,6 +8,8 @@ control: u32 = 0x0005_2078,
 dtcm_size_base: u32 = 0x0300_000A,
 itcm_size_base: u32 = 0x0000_0020,
 
+wait_for_interrupt: bool = false,
+
 // Protection Unit
 // cache_bits_data_unified: u32 = 0x0000_0000,
 // cache_write_bufability: u32 = 0x0000_0000, // For Data Protection Regions
@@ -73,7 +75,7 @@ pub fn write(self: *@This(), op1: u3, cn: u4, cm: u4, op2: u3, value: u32) void 
         0b000_0110_0111_001,
         => log.err("TODO: write to PU instruction region #{}", .{cm}),
 
-        0b000_0111_0000_100 => log.err("TODO: halt ARM946E-S", .{}),
+        0b000_0111_0000_100 => self.wait_for_interrupt = true, // NDS9 Halt
         0b000_0111_0101_000 => log.err("TODO: invalidate instruction cache", .{}),
         0b000_0111_0110_000 => log.err("TODO: invalidate data cache", .{}),
         0b000_0111_1010_100 => log.err("TODO: drain write buffer", .{}),

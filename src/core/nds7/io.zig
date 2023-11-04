@@ -15,27 +15,25 @@ const log = std.log.scoped(.nds7_io);
 pub const Io = struct {
     shr: *SharedCtx.Io,
 
-    /// Interrupt Master Enable
+    /// IME - Interrupt Master Enable
     /// Read/Write
     ime: bool = false,
 
-    /// Interrupt Enable
+    /// IE -  Interrupt Enable
     /// Read/Write
-    ///
-    /// Caller must cast the `u32` to either `nds7.IntEnable` or `nds9.IntEnable`
     ie: IntEnable = .{ .raw = 0x0000_0000 },
 
     /// IF - Interrupt Request
     /// Read/Write
-    ///
-    /// Caller must cast the `u32` to either `nds7.IntRequest` or `nds9.IntRequest`
     irq: IntRequest = .{ .raw = 0x0000_0000 },
 
-    /// Post Boot Flag
+    /// POSTFLG - Post Boot Flag
     /// Read/Write
-    ///
-    /// Caller must cast the `u8` to either `nds7.PostFlg` or `nds9.PostFlg`
     postflg: PostFlag = .in_progress,
+
+    /// HALTCNT - Low Power Mode Control
+    /// Read/Write
+    haltcnt: Haltcnt = .execute,
 
     pub fn init(io: *SharedCtx.Io) @This() {
         return .{ .shr = io };
@@ -138,6 +136,13 @@ pub const Vramstat = extern union {
     vramc_enabled: Bit(u8, 0),
     vramd_enabled: Bit(u8, 1),
     raw: u8,
+};
+
+const Haltcnt = enum(u2) {
+    execute = 0,
+    gba_mode,
+    halt,
+    sleep,
 };
 
 const PostFlag = enum(u8) { in_progress = 0, completed };

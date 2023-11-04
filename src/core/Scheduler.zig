@@ -41,6 +41,10 @@ pub fn reset(self: *@This()) void {
     self.tick = 0;
 }
 
+pub inline fn peekTimestamp(self: *const @This()) u64 {
+    return self.queue.items[0].tick;
+}
+
 pub inline fn check(self: *@This()) ?Event {
     @setRuntimeSafety(false);
     if (self.tick < self.queue.items[0].tick) return null;
