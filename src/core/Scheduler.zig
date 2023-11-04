@@ -1,7 +1,6 @@
 const std = @import("std");
 
-const Bus9 = @import("nds9/Bus.zig");
-const Bus7 = @import("nds7/Bus.zig");
+const System = @import("emu.zig").System;
 
 const PriorityQueue = std.PriorityQueue(Event, void, Event.lessThan);
 const Allocator = std.mem.Allocator;
@@ -52,25 +51,25 @@ pub inline fn check(self: *@This()) ?Event {
     return self.queue.remove();
 }
 
-pub fn handle(self: *@This(), bus_ptr: ?*anyopaque, event: Event, late: u64) void {
+pub fn handle(self: *@This(), system: System, event: Event, late: u64) void {
     switch (event.kind) {
         .heat_death => unreachable,
         .nds7 => |ev| {
-            const bus: *Bus7 = @ptrCast(@alignCast(bus_ptr));
+            const bus = system.bus7;
             _ = bus;
 
             switch (ev) {}
         },
         .nds9 => |ev| {
-            const bus: *Bus9 = @ptrCast(@alignCast(bus_ptr));
+            const bus = system.bus9;
 
             switch (ev) {
                 .draw => {
                     bus.ppu.drawScanline(bus);
-                    bus.ppu.onHdrawEnd(self, late);
+                    bus.ppu.onHdrawEnd(system, self, late);
                 },
-                .hblank => bus.ppu.onHblankEnd(self, late),
-                .vblank => bus.ppu.onVblankEnd(self, late),
+                .hblank => bus.ppu.onHblankEnd(system, self, late),
+                .vblank => bus.ppu.onVblankEnd(system, self, late),
                 .sqrt => bus.io.sqrt.onSqrtCalc(),
                 .div => bus.io.div.onDivCalc(),
             }

@@ -8,6 +8,8 @@ const Vram = @import("ppu/Vram.zig");
 const EngineA = @import("ppu/engine.zig").EngineA;
 const EngineB = @import("ppu/engine.zig").EngineB;
 
+const handleInterrupt = @import("emu.zig").handleInterrupt;
+
 pub const screen_width = 256;
 pub const screen_height = 192;
 const KiB = 0x400;
@@ -59,35 +61,49 @@ pub const Ppu = struct {
     }
 
     /// HDraw -> HBlank
-    pub fn onHdrawEnd(self: *@This(), scheduler: *Scheduler, late: u64) void {
-        std.debug.assert(self.io.nds9.dispstat.hblank.read() == false);
-        std.debug.assert(self.io.nds9.dispstat.vblank.read() == false);
+    pub fn onHdrawEnd(self: *@This(), system: System, scheduler: *Scheduler, late: u64) void {
+        if (self.io.nds9.dispstat.hblank_irq.read()) {
+            system.bus9.io.irq.hblank.set();
+            handleInterrupt(.nds9, system.arm946es);
+        }
+
+        if (self.io.nds7.dispstat.hblank_irq.read()) {
+            system.bus7.io.irq.hblank.set();
+            handleInterrupt(.nds7, system.arm7tdmi);
+        }
+
+        // TODO: Run DMAs on HBlank
 
         self.io.nds9.dispstat.hblank.set();
         self.io.nds7.dispstat.hblank.set();
-
-        // TODO: Signal HBlank IRQ
 
         const dots_in_hblank = 99;
         scheduler.push(.{ .nds9 = .hblank }, dots_in_hblank * cycles_per_dot -| late);
     }
 
-    // VBlank -> HBlank (Still VBlank)
-    pub fn onVblankEnd(self: *@This(), scheduler: *Scheduler, late: u64) void {
-        std.debug.assert(!self.io.nds9.dispstat.hblank.read());
-        std.debug.assert(self.io.nds9.vcount.scanline.read() == 262 or self.io.nds9.dispstat.vblank.read());
+    /// VBlank -> HBlank (Still VBlank)
+    pub fn onVblankEnd(self: *@This(), system: System, scheduler: *Scheduler, late: u64) void {
+        if (self.io.nds9.dispstat.hblank_irq.read()) {
+            system.bus9.io.irq.hblank.set();
+            handleInterrupt(.nds9, system.arm946es);
+        }
+
+        if (self.io.nds7.dispstat.hblank_irq.read()) {
+            system.bus7.io.irq.hblank.set();
+            handleInterrupt(.nds7, system.arm7tdmi);
+        }
 
         self.io.nds9.dispstat.hblank.set();
         self.io.nds7.dispstat.hblank.set();
 
-        // TODO: Signal HBlank IRQ
+        // TODO: Run DMAs on HBlank
 
         const dots_in_hblank = 99;
         scheduler.push(.{ .nds9 = .hblank }, dots_in_hblank * cycles_per_dot -| late);
     }
 
     /// HBlank -> HDraw / VBlank
-    pub fn onHblankEnd(self: *@This(), scheduler: *Scheduler, late: u64) void {
+    pub fn onHblankEnd(self: *@This(), system: System, scheduler: *Scheduler, late: u64) void {
         const scanline_total = 263; // 192 visible, 71 blanking
 
         const prev_scanline = self.io.nds9.vcount.scanline.read();
@@ -102,18 +118,24 @@ pub const Ppu = struct {
         {
             const coincidence = scanline == self.io.nds9.dispstat.lyc.read();
             self.io.nds9.dispstat.coincidence.write(coincidence);
+
+            if (coincidence and self.io.nds9.dispstat.vcount_irq.read()) {
+                system.bus9.io.irq.coincidence.set();
+                handleInterrupt(.nds9, system.arm946es);
+            }
         }
+
         {
             const coincidence = scanline == self.io.nds7.dispstat.lyc.read();
             self.io.nds7.dispstat.coincidence.write(coincidence);
+
+            if (coincidence and self.io.nds7.dispstat.vcount_irq.read()) {
+                system.bus7.io.irq.coincidence.set();
+                handleInterrupt(.nds7, system.arm7tdmi);
+            }
         }
 
-        // TODO: LYC == LY IRQ
-
         if (scanline < 192) {
-            std.debug.assert(self.io.nds9.dispstat.vblank.read() == false);
-            std.debug.assert(self.io.nds9.dispstat.hblank.read() == false);
-
             // Draw Another Scanline
             const dots_in_hdraw = 256;
             return scheduler.push(.{ .nds9 = .draw }, dots_in_hdraw * cycles_per_dot -| late);
@@ -123,17 +145,26 @@ pub const Ppu = struct {
             // Transition from Hblank to Vblank
             self.fb.swap();
 
+            if (self.io.nds9.dispstat.vblank_irq.read()) {
+                system.bus9.io.irq.vblank.set();
+                handleInterrupt(.nds9, system.arm946es);
+            }
+
+            if (self.io.nds7.dispstat.vblank_irq.read()) {
+                system.bus7.io.irq.vblank.set();
+                handleInterrupt(.nds7, system.arm7tdmi);
+            }
+
             self.io.nds9.dispstat.vblank.set();
             self.io.nds7.dispstat.vblank.set();
 
-            // TODO: Signal VBlank IRQ
+            // TODO: Affine BG Latches
+            // TODO: VBlank DMA Transfers
         }
 
         if (scanline == 262) {
             self.io.nds9.dispstat.vblank.unset();
             self.io.nds7.dispstat.vblank.unset();
-
-            std.debug.assert(self.io.nds9.dispstat.vblank.read() == (scanline != 262));
         }
 
         const dots_in_vblank = 256;

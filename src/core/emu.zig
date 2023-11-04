@@ -129,8 +129,9 @@ pub fn runFrame(scheduler: *Scheduler, system: System) void {
                 .nds7 => system.bus7,
                 .nds9 => system.bus9,
             };
+            _ = bus_ptr;
 
-            scheduler.handle(bus_ptr, ev, late);
+            scheduler.handle(system, ev, late);
         }
     }
 }

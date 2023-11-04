@@ -320,6 +320,10 @@ pub const masks = struct {
 
 // FIXME: bitfields depends on NDS9 / NDS7
 pub const IntEnable = extern union {
+    vblank: Bit(u32, 0),
+    hblank: Bit(u32, 1),
+    coincidence: Bit(u32, 2),
+
     ipcsync: Bit(u32, 16),
     ipc_send_empty: Bit(u32, 17),
     ipc_recv_not_empty: Bit(u32, 18),
