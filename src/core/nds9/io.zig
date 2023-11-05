@@ -34,9 +34,6 @@ pub const Io = struct {
     /// Caller must cast the `u32` to either `nds7.IntRequest` or `nds9.IntRequest`
     irq: IntRequest = .{ .raw = 0x0000_0000 },
 
-    // Read Only
-    keyinput: AtomicKeyInput = .{},
-
     /// DS Maths
     div: Divisor = .{},
     sqrt: SquareRootUnit = .{},
@@ -65,9 +62,9 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_02A8, 0x0400_02AC => @truncate(bus.io.div.remainder >> shift(u64, address)),
             0x0400_02B4 => @truncate(bus.io.sqrt.result),
 
-            0x0400_4008 => 0x0000_0000, // Lets software know this is NOT a DSi
-
             0x0410_0000 => bus.io.shr.ipc.recv(.nds9),
+
+            0x0400_4000, 0x0400_4008 => 0x0000_0000, // Lets software know this is NOT a DSi
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u16 => switch (address) {
@@ -79,7 +76,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
 
             0x0400_0004 => bus.ppu.io.nds9.dispstat.raw,
-            0x0400_0130 => bus.io.keyinput.load(.Monotonic),
+            0x0400_0130 => bus.io.shr.keyinput.load(.Monotonic),
 
             0x0400_0180 => @truncate(bus.io.shr.ipc._nds9.sync.raw),
             0x0400_0184 => @truncate(bus.io.shr.ipc._nds9.cnt.raw),
@@ -96,6 +93,8 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
 
             // Timers
             0x0400_0100...0x0400_010F => warn("TODO: impl timer", .{}),
+
+            0x0400_0208 => @intFromBool(bus.io.ime),
 
             0x0400_4000 => 0x00, // Lets software know this is NOT a DSi
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
@@ -147,11 +146,16 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
                 bus.io.sqrt.schedule(bus.scheduler);
             },
 
+            // Engine B
             0x0400_0304 => bus.ppu.io.powcnt.raw = value,
+
+            0x0400_1000 => bus.ppu.engines[1].dispcnt.raw = value,
 
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
         u16 => switch (address) {
+            0x0400_0004 => bus.ppu.io.nds9.dispstat.raw = value,
+
             // DMA Transfers
             0x0400_00B0...0x0400_00DE => log.warn("TODO: impl DMA", .{}),
             0x0400_00E0...0x0400_00EE => log.warn("TODO: impl DMA fill", .{}),
@@ -184,6 +188,8 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // Timers
             0x0400_0100...0x0400_010F => log.warn("TODO: impl timer", .{}),
+
+            0x0400_0208 => bus.io.ime = value & 1 == 1,
 
             0x0400_0240 => {
                 bus.ppu.vram.io.cnt_a.raw = value;
@@ -469,42 +475,4 @@ pub const Dispstat = extern union {
     /// FIXME: confirm that I'm reading DISPSTAT.7 correctly into LYC
     lyc: Bitfield(u16, 7, 9),
     raw: u16,
-};
-
-/// Read Only
-/// 0 = Pressed, 1 = Released
-pub const KeyInput = extern union {
-    a: Bit(u16, 0),
-    b: Bit(u16, 1),
-    select: Bit(u16, 2),
-    start: Bit(u16, 3),
-    right: Bit(u16, 4),
-    left: Bit(u16, 5),
-    up: Bit(u16, 6),
-    down: Bit(u16, 7),
-    shoulder_r: Bit(u16, 8),
-    shoulder_l: Bit(u16, 9),
-    raw: u16,
-};
-
-const AtomicKeyInput = struct {
-    const Self = @This();
-    const Ordering = std.atomic.Ordering;
-
-    inner: KeyInput = .{ .raw = 0x03FF },
-
-    pub inline fn load(self: *const Self, comptime ordering: Ordering) u16 {
-        return switch (ordering) {
-            .AcqRel, .Release => @compileError("not supported for atomic loads"),
-            else => @atomicLoad(u16, &self.inner.raw, ordering),
-        };
-    }
-
-    pub inline fn fetchOr(self: *Self, value: u16, comptime ordering: Ordering) void {
-        _ = @atomicRmw(u16, &self.inner.raw, .Or, value, ordering);
-    }
-
-    pub inline fn fetchAnd(self: *Self, value: u16, comptime ordering: Ordering) void {
-        _ = @atomicRmw(u16, &self.inner.raw, .And, value, ordering);
-    }
 };

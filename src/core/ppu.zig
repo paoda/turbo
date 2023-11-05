@@ -29,13 +29,13 @@ pub const Ppu = struct {
         const ty = @import("nds9/io.zig");
 
         nds9: struct {
-            dispstat: ty.Dispstat = .{ .raw = 0x0000_0000 },
-            vcount: ty.Vcount = .{ .raw = 0x0000_0000 },
+            dispstat: ty.Dispstat = .{ .raw = 0x00000 },
+            vcount: ty.Vcount = .{ .raw = 0x0000 },
         } = .{},
 
         nds7: struct {
-            dispstat: ty.Dispstat = .{ .raw = 0x0000_0000 },
-            vcount: ty.Vcount = .{ .raw = 0x0000_0000 },
+            dispstat: ty.Dispstat = .{ .raw = 0x0000 },
+            vcount: ty.Vcount = .{ .raw = 0x00000 },
         } = .{},
 
         powcnt: ty.PowCnt = .{ .raw = 0x0000_0000 },

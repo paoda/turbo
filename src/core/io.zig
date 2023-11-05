@@ -12,6 +12,9 @@ pub const Io = struct {
     ipc: Ipc = .{},
 
     wramcnt: WramCnt = .{ .raw = 0x00 },
+
+    // Read Only
+    keyinput: AtomicKeyInput = .{},
 };
 
 fn warn(comptime format: []const u8, args: anytype) u0 {
@@ -388,5 +391,43 @@ const Fifo = struct {
         const _mask: Index = @intCast(self.buf.len - 1);
 
         return idx & _mask;
+    }
+};
+
+/// Read Only
+/// 0 = Pressed, 1 = Released
+pub const KeyInput = extern union {
+    a: Bit(u16, 0),
+    b: Bit(u16, 1),
+    select: Bit(u16, 2),
+    start: Bit(u16, 3),
+    right: Bit(u16, 4),
+    left: Bit(u16, 5),
+    up: Bit(u16, 6),
+    down: Bit(u16, 7),
+    shoulder_r: Bit(u16, 8),
+    shoulder_l: Bit(u16, 9),
+    raw: u16,
+};
+
+const AtomicKeyInput = struct {
+    const Self = @This();
+    const Ordering = std.atomic.Ordering;
+
+    inner: KeyInput = .{ .raw = 0x03FF },
+
+    pub inline fn load(self: *const Self, comptime ordering: Ordering) u16 {
+        return switch (ordering) {
+            .AcqRel, .Release => @compileError("not supported for atomic loads"),
+            else => @atomicLoad(u16, &self.inner.raw, ordering),
+        };
+    }
+
+    pub inline fn fetchOr(self: *Self, value: u16, comptime ordering: Ordering) void {
+        _ = @atomicRmw(u16, &self.inner.raw, .Or, value, ordering);
+    }
+
+    pub inline fn fetchAnd(self: *Self, value: u16, comptime ordering: Ordering) void {
+        _ = @atomicRmw(u16, &self.inner.raw, .And, value, ordering);
     }
 };

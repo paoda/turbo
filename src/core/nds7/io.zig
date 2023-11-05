@@ -3,6 +3,8 @@ const std = @import("std");
 const Bitfield = @import("bitfield").Bitfield;
 const Bit = @import("bitfield").Bit;
 
+const Ppu = @import("../ppu.zig").Ppu;
+
 const Bus = @import("Bus.zig");
 const SharedCtx = @import("../emu.zig").SharedCtx;
 const masks = @import("../io.zig").masks;
@@ -35,8 +37,14 @@ pub const Io = struct {
     /// Read/Write
     haltcnt: Haltcnt = .execute,
 
+    ppu: ?*Ppu.Io = null,
+
     pub fn init(io: *SharedCtx.Io) @This() {
         return .{ .shr = io };
+    }
+
+    pub fn configure(self: *@This(), ppu: *Ppu) void {
+        self.ppu = &ppu.io;
     }
 };
 
@@ -58,12 +66,14 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u16 => switch (address) {
+            0x0400_0004 => bus.io.ppu.?.nds7.dispstat.raw,
             // DMA Transfers
             0x0400_00B0...0x0400_00DE => warn("TODO: impl DMA", .{}),
 
             // Timers
             0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
 
+            0x0400_0130 => bus.io.shr.keyinput.load(.Monotonic),
             0x0400_0180 => @truncate(bus.io.shr.ipc._nds7.sync.raw),
             0x0400_0184 => @truncate(bus.io.shr.ipc._nds7.cnt.raw),
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
@@ -111,6 +121,8 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds7, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds7, value),
+
+            0x0400_0208 => bus.io.ime = value & 1 == 1,
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>4})", .{ T, address, value }),
         },
         u8 => switch (address) {

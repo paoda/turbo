@@ -51,6 +51,9 @@ pub fn main() !void {
         var bus7 = try System.Bus7.init(allocator, &scheduler, ctx);
         var bus9 = try System.Bus9.init(allocator, &scheduler, ctx);
 
+        // TODO: Think of a better way to do this
+        bus7.io.configure(&bus9.ppu);
+
         var arm7tdmi = System.Arm7tdmi.init(IScheduler.init(&scheduler), IBus.init(&bus7));
         var arm946es = System.Arm946es.init(IScheduler.init(&scheduler), IBus.init(&bus9), ICoprocessor.init(&cp15));
 

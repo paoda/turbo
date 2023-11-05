@@ -8,7 +8,7 @@ const imgui = @import("ui/imgui.zig");
 const emu = @import("core/emu.zig");
 
 const System = @import("core/emu.zig").System;
-const KeyInput = @import("core/nds9/io.zig").KeyInput;
+const KeyInput = @import("core/io.zig").KeyInput;
 const Scheduler = @import("core/Scheduler.zig");
 
 const Allocator = std.mem.Allocator;
@@ -141,7 +141,7 @@ pub const Ui = struct {
                             else => {},
                         }
 
-                        system.bus9.io.keyinput.fetchAnd(~keyinput.raw, .Monotonic);
+                        system.bus9.io.shr.keyinput.fetchAnd(~keyinput.raw, .Monotonic);
                     },
                     SDL.SDL_KEYUP => {
                         // TODO: Make use of compare_and_xor?
@@ -162,7 +162,7 @@ pub const Ui = struct {
                             else => {},
                         }
 
-                        system.bus9.io.keyinput.fetchOr(keyinput.raw, .Monotonic);
+                        system.bus9.io.shr.keyinput.fetchOr(keyinput.raw, .Monotonic);
                     },
                     else => {},
                 }
