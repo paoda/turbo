@@ -63,7 +63,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0214 => bus.io.irq.raw,
 
             0x0410_0000 => bus.io.shr.ipc.recv(.nds7),
-            else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
+            else => 0, // warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u16 => switch (address) {
             0x0400_0004 => bus.io.ppu.?.nds7.dispstat.raw,
@@ -76,7 +76,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0130 => bus.io.shr.keyinput.load(.Monotonic),
             0x0400_0180 => @truncate(bus.io.shr.ipc._nds7.sync.raw),
             0x0400_0184 => @truncate(bus.io.shr.ipc._nds7.cnt.raw),
-            else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
+            else => 0, // warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u8 => switch (address) {
             // DMA Transfers
@@ -89,7 +89,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0241 => bus.io.shr.wramcnt.raw,
 
             0x0400_0300 => @intFromEnum(bus.io.postflg),
-            else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
+            else => 0, // warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         else => @compileError(T ++ " is an unsupported bus read type"),
     };
@@ -110,7 +110,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0214 => bus.io.irq.raw &= ~value,
 
             0x0400_0188 => bus.io.shr.ipc.send(.nds7, value),
-            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
+            else => {}, // log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },
         u16 => switch (address) {
             // DMA Transfers
@@ -123,7 +123,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds7, value),
 
             0x0400_0208 => bus.io.ime = value & 1 == 1,
-            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>4})", .{ T, address, value }),
+            else => {}, // log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>4})", .{ T, address, value }),
         },
         u8 => switch (address) {
             // DMA Transfers
@@ -133,7 +133,16 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0100...0x0400_010F => log.warn("TODO: impl timer", .{}),
 
             0x0400_0208 => bus.io.ime = value & 1 == 1,
-            else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>2})", .{ T, address, value }),
+
+            0x0400_0301 => switch ((value >> 6) & 0b11) {
+                0b00 => bus.io.haltcnt = .execute,
+                0b10 => bus.io.haltcnt = .halt,
+                else => |val| {
+                    const tag: Haltcnt = @enumFromInt(val);
+                    log.err("TODO: Implement {}", .{tag});
+                },
+            },
+            else => {}, // log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>2})", .{ T, address, value }),
         },
         else => @compileError(T ++ " is an unsupported bus write type"),
     }

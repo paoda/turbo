@@ -21,7 +21,7 @@ pub const Ppu = struct {
 
     vram: *Vram,
 
-    engines: struct { EngineA, EngineB } = .{ .{}, .{} },
+    engines: struct { EngineA, EngineB },
 
     io: Io = .{},
 
@@ -44,20 +44,22 @@ pub const Ppu = struct {
     pub fn init(allocator: Allocator, vram: *Vram) !@This() {
         return .{
             .fb = try FrameBuffer.init(allocator),
+            .engines = .{ try EngineA.init(allocator), try EngineB.init(allocator) },
             .vram = vram,
         };
     }
 
     pub fn deinit(self: @This(), allocator: Allocator) void {
         self.fb.deinit(allocator);
+        inline for (self.engines) |eng| eng.deinit(allocator);
     }
 
     pub fn drawScanline(self: *@This(), bus: *System.Bus9) void {
         if (self.io.powcnt.engine2d_a.read())
-            self.engines[0].drawScanline(bus, &self.fb, &self.io);
+            self.engines[0].drawScanline(bus, &self.fb);
 
         if (self.io.powcnt.engine2d_b.read())
-            self.engines[1].drawScanline(bus, &self.fb, &self.io);
+            self.engines[1].drawScanline(bus, &self.fb);
     }
 
     /// HDraw -> HBlank

@@ -62,6 +62,8 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_02A8, 0x0400_02AC => @truncate(bus.io.div.remainder >> shift(u64, address)),
             0x0400_02B4 => @truncate(bus.io.sqrt.result),
 
+            0x0400_1000 => bus.ppu.engines[1].dispcnt.raw,
+
             0x0410_0000 => bus.io.shr.ipc.recv(.nds9),
 
             0x0400_4000, 0x0400_4008 => 0x0000_0000, // Lets software know this is NOT a DSi
@@ -83,6 +85,20 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
 
             0x0400_0280 => @truncate(bus.io.div.cnt.raw),
             0x0400_02B0 => @truncate(bus.io.sqrt.cnt.raw),
+
+            0x0400_1008 => bus.ppu.engines[1].bg[0].cnt.raw,
+            0x0400_100A => bus.ppu.engines[1].bg[1].cnt.raw,
+            0x0400_100C => bus.ppu.engines[1].bg[2].cnt.raw,
+            0x0400_100E => bus.ppu.engines[1].bg[3].cnt.raw,
+
+            0x0400_1010 => bus.ppu.engines[1].bg[0].hofs.raw,
+            0x0400_1012 => bus.ppu.engines[1].bg[0].vofs.raw,
+            0x0400_1014 => bus.ppu.engines[1].bg[1].hofs.raw,
+            0x0400_1016 => bus.ppu.engines[1].bg[1].vofs.raw,
+            0x0400_1018 => bus.ppu.engines[1].bg[2].hofs.raw,
+            0x0400_101A => bus.ppu.engines[1].bg[2].vofs.raw,
+            0x0400_101C => bus.ppu.engines[1].bg[3].hofs.raw,
+            0x0400_101E => bus.ppu.engines[1].bg[3].vofs.raw,
 
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
@@ -108,6 +124,7 @@ const subset = @import("../../util.zig").subset;
 pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
     switch (T) {
         u32 => switch (address) {
+
             // DMA Transfers
             0x0400_00B0...0x0400_00DC => log.warn("TODO: impl DMA", .{}),
             0x0400_00E0...0x0400_00EC => log.warn("TODO: impl DMA fill", .{}),
@@ -178,6 +195,20 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             },
 
             0x0400_0304 => bus.ppu.io.powcnt.raw = value,
+
+            0x0400_1008 => bus.ppu.engines[1].bg[0].cnt.raw = value,
+            0x0400_100A => bus.ppu.engines[1].bg[1].cnt.raw = value,
+            0x0400_100C => bus.ppu.engines[1].bg[2].cnt.raw = value,
+            0x0400_100E => bus.ppu.engines[1].bg[3].cnt.raw = value,
+
+            0x0400_1010 => bus.ppu.engines[1].bg[0].hofs.raw = value,
+            0x0400_1012 => bus.ppu.engines[1].bg[0].vofs.raw = value,
+            0x0400_1014 => bus.ppu.engines[1].bg[1].hofs.raw = value,
+            0x0400_1016 => bus.ppu.engines[1].bg[1].vofs.raw = value,
+            0x0400_1018 => bus.ppu.engines[1].bg[2].hofs.raw = value,
+            0x0400_101A => bus.ppu.engines[1].bg[2].vofs.raw = value,
+            0x0400_101C => bus.ppu.engines[1].bg[3].hofs.raw = value,
+            0x0400_101E => bus.ppu.engines[1].bg[3].vofs.raw = value,
 
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>4})", .{ T, address, value }),
         },
@@ -400,7 +431,7 @@ pub const DispcntA = extern union {
     tile_obj_1d_boundary: Bitfield(u32, 20, 2),
     bitmap_obj_1d_boundary: Bit(u32, 22),
     obj_during_hblank: Bit(u32, 23),
-    character_base: Bitfield(u32, 24, 3),
+    char_base: Bitfield(u32, 24, 3),
     screen_base: Bitfield(u32, 27, 3),
     bg_ext_pal_enable: Bit(u32, 30),
     obj_ext_pal_enable: Bit(u32, 31),
@@ -476,3 +507,23 @@ pub const Dispstat = extern union {
     lyc: Bitfield(u16, 7, 9),
     raw: u16,
 };
+
+pub const Bgcnt = extern union {
+    priority: Bitfield(u16, 0, 2),
+    char_base: Bitfield(u16, 2, 4),
+    mosaic_enable: Bit(u16, 6),
+    colour_mode: Bit(u16, 7),
+    screen_base: Bitfield(u16, 8, 5),
+    display_overflow: Bit(u16, 13),
+    size: Bitfield(u16, 14, 2),
+    raw: u16,
+};
+
+/// Write Only
+const BackgroundOffset = extern union {
+    offset: Bitfield(u16, 0, 9),
+    raw: u16,
+};
+
+pub const Hofs = BackgroundOffset;
+pub const Vofs = BackgroundOffset;

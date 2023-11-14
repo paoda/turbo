@@ -110,7 +110,7 @@ fn _write(self: *@This(), comptime T: type, comptime mode: Mode, address: u32, v
             0b00 => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
             else => self.shr_wram.write(T, .nds7, aligned_addr, value),
         },
-        0x0380_0000...0x0380_FFFF => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
+        0x0380_0000...0x03FF_FFFF => writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value),
         0x0400_0000...0x04FF_FFFF => io.write(self, T, aligned_addr, value),
         0x0600_0000...0x06FF_FFFF => self.vram.write(T, .nds7, aligned_addr, value),
         else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
