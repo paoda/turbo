@@ -270,15 +270,12 @@ pub const Wram = struct {
         }
     }
 
-    // TODO: Rename
-    const Device = enum { nds9, nds7 };
-
-    pub fn read(self: @This(), comptime T: type, comptime dev: Device, address: u32) T {
+    pub fn read(self: @This(), comptime T: type, comptime proc: System.Process, address: u32) T {
         const bits = @typeInfo(IntFittingRange(0, page_size - 1)).Int.bits;
         const masked_addr = address & (addr_space_size - 1);
         const page = masked_addr >> bits;
         const offset = masked_addr & (page_size - 1);
-        const table = if (dev == .nds9) self.nds9_table else self.nds7_table;
+        const table = if (proc == .nds9) self.nds9_table else self.nds7_table;
 
         if (table[page]) |some_ptr| {
             const ptr: [*]const T = @ptrCast(@alignCast(some_ptr));
@@ -286,16 +283,16 @@ pub const Wram = struct {
             return ptr[offset / @sizeOf(T)];
         }
 
-        log.err("{s}: read(T: {}, addr: 0x{X:0>8}) was in un-mapped WRAM space", .{ @tagName(dev), T, 0x0300_0000 + address });
+        log.err("{s}: read(T: {}, addr: 0x{X:0>8}) was in un-mapped WRAM space", .{ @tagName(proc), T, 0x0300_0000 + address });
         return 0x00;
     }
 
-    pub fn write(self: *@This(), comptime T: type, comptime dev: Device, address: u32, value: T) void {
+    pub fn write(self: *@This(), comptime T: type, comptime proc: System.Process, address: u32, value: T) void {
         const bits = @typeInfo(IntFittingRange(0, page_size - 1)).Int.bits;
         const masked_addr = address & (addr_space_size - 1);
         const page = masked_addr >> bits;
         const offset = masked_addr & (page_size - 1);
-        const table = if (dev == .nds9) self.nds9_table else self.nds7_table;
+        const table = if (proc == .nds9) self.nds9_table else self.nds7_table;
 
         if (table[page]) |some_ptr| {
             const ptr: [*]T = @ptrCast(@alignCast(some_ptr));
@@ -304,7 +301,7 @@ pub const Wram = struct {
             return;
         }
 
-        log.err("{s}: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8}) was in un-mapped WRAM space", .{ @tagName(dev), T, 0x0300_0000 + address, value });
+        log.err("{s}: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8}) was in un-mapped WRAM space", .{ @tagName(proc), T, 0x0300_0000 + address, value });
     }
 };
 
@@ -320,6 +317,8 @@ pub const System = struct {
     pub const Arm7tdmi = @import("arm32").Arm7tdmi;
     pub const Arm946es = @import("arm32").Arm946es;
 
+    pub const Process = enum { nds7, nds9 };
+
     arm7tdmi: *Arm7tdmi,
     arm946es: *Arm946es,
 
@@ -332,17 +331,29 @@ pub const System = struct {
         self.bus7.deinit(allocator);
         self.bus9.deinit(allocator);
     }
+
+    fn Cpu(comptime proc: Process) type {
+        return switch (proc) {
+            .nds7 => Arm7tdmi,
+            .nds9 => Arm946es,
+        };
+    }
+
+    fn Bus(comptime proc: Process) type {
+        return switch (proc) {
+            .nds7 => Bus7,
+            .nds9 => Bus9,
+        };
+    }
 };
 
-// FIXME: Using Wram.Device here is jank. System should probably carry an Enum + some Generic Type Fns
-pub fn handleInterrupt(comptime dev: Wram.Device, cpu: if (dev == .nds9) *System.Arm946es else *System.Arm7tdmi) void {
-    const Bus = if (dev == .nds9) System.Bus9 else System.Bus7;
-    const bus_ptr: *Bus = @ptrCast(@alignCast(cpu.bus.ptr));
+pub fn handleInterrupt(comptime proc: System.Process, cpu: *System.Cpu(proc)) void {
+    const bus_ptr: *System.Bus(proc) = @ptrCast(@alignCast(cpu.bus.ptr));
 
     if (!bus_ptr.io.ime or cpu.cpsr.i.read()) return; // ensure irqs are enabled
     if ((bus_ptr.io.ie.raw & bus_ptr.io.irq.raw) == 0) return; // ensure there is an irq to handle
 
-    switch (dev) {
+    switch (proc) {
         .nds9 => {
             const cp15: *System.Cp15 = @ptrCast(@alignCast(cpu.cp15.ptr));
             cp15.wait_for_interrupt = false;
@@ -359,6 +370,6 @@ pub fn handleInterrupt(comptime dev: Wram.Device, cpu: if (dev == .nds9) *System
 
     cpu.r[14] = ret_addr;
     cpu.spsr.raw = spsr.raw;
-    cpu.r[15] = if (dev == .nds9) 0xFFFF_0018 else 0x0000_0018;
+    cpu.r[15] = if (proc == .nds9) 0xFFFF_0018 else 0x0000_0018;
     cpu.pipe.reload(cpu);
 }

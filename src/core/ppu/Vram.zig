@@ -1,6 +1,8 @@
 const std = @import("std");
 const KiB = 0x400;
 
+const System = @import("../emu.zig").System;
+
 const Allocator = std.mem.Allocator;
 const IntFittingRange = std.math.IntFittingRange;
 
@@ -253,15 +255,12 @@ pub fn update(self: *@This()) void {
     }
 }
 
-// TODO: Rename
-const Device = enum { nds9, nds7 };
-
-pub fn read(self: @This(), comptime T: type, comptime dev: Device, address: u32) T {
+pub fn read(self: @This(), comptime T: type, comptime proc: System.Process, address: u32) T {
     const bits = @typeInfo(IntFittingRange(0, page_size - 1)).Int.bits;
     const masked_addr = address & (addr_space_size - 1);
     const page = masked_addr >> bits;
     const offset = masked_addr & (page_size - 1);
-    const table = if (dev == .nds9) self.nds9_table else self.nds7_table;
+    const table = if (proc == .nds9) self.nds9_table else self.nds7_table;
 
     if (table[page]) |some_ptr| {
         const ptr: [*]const T = @ptrCast(@alignCast(some_ptr));
@@ -269,16 +268,16 @@ pub fn read(self: @This(), comptime T: type, comptime dev: Device, address: u32)
         return ptr[offset / @sizeOf(T)];
     }
 
-    log.err("{s}: read(T: {}, addr: 0x{X:0>8}) was in un-mapped VRAM space", .{ @tagName(dev), T, address });
+    log.err("{s}: read(T: {}, addr: 0x{X:0>8}) was in un-mapped VRAM space", .{ @tagName(proc), T, address });
     return 0x00;
 }
 
-pub fn write(self: *@This(), comptime T: type, comptime dev: Device, address: u32, value: T) void {
+pub fn write(self: *@This(), comptime T: type, comptime proc: System.Process, address: u32, value: T) void {
     const bits = @typeInfo(IntFittingRange(0, page_size - 1)).Int.bits;
     const masked_addr = address & (addr_space_size - 1);
     const page = masked_addr >> bits;
     const offset = masked_addr & (page_size - 1);
-    const table = if (dev == .nds9) self.nds9_table else self.nds7_table;
+    const table = if (proc == .nds9) self.nds9_table else self.nds7_table;
 
     if (table[page]) |some_ptr| {
         const ptr: [*]T = @ptrCast(@alignCast(some_ptr));
@@ -287,5 +286,5 @@ pub fn write(self: *@This(), comptime T: type, comptime dev: Device, address: u3
         return;
     }
 
-    log.err("{s}: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8}) was in un-mapped VRA< space", .{ @tagName(dev), T, address, value });
+    log.err("{s}: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8}) was in un-mapped VRA< space", .{ @tagName(proc), T, address, value });
 }

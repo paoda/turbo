@@ -36,8 +36,6 @@ const Ipc = struct {
 
     // TODO: DS Cartridge I/O Ports
 
-    const Source = enum { nds7, nds9 };
-
     const Impl = struct {
         /// IPC Synchronize
         /// Read/Write
@@ -60,8 +58,8 @@ const Ipc = struct {
 
     /// IPCSYNC
     /// Read/Write
-    pub fn setIpcSync(self: *@This(), comptime src: Source, value: anytype) void {
-        switch (src) {
+    pub fn setIpcSync(self: *@This(), comptime proc: System.Process, value: anytype) void {
+        switch (proc) {
             .nds7 => {
                 self._nds7.sync.raw = masks.ipcFifoSync(self._nds7.sync.raw, value);
                 self._nds9.sync.raw = masks.mask(self._nds9.sync.raw, (self._nds7.sync.raw >> 8) & 0xF, 0xF);
@@ -109,8 +107,8 @@ const Ipc = struct {
 
     /// IPCFIFOCNT
     /// Read/Write
-    pub fn setIpcFifoCnt(self: *@This(), comptime src: Source, value: anytype) void {
-        switch (src) {
+    pub fn setIpcFifoCnt(self: *@This(), comptime proc: System.Process, value: anytype) void {
+        switch (proc) {
             .nds7 => self._nds7.cnt.raw = masks.ipcFifoCnt(self._nds7.cnt.raw, value),
             .nds9 => self._nds9.cnt.raw = masks.ipcFifoCnt(self._nds9.cnt.raw, value),
         }
@@ -118,8 +116,8 @@ const Ipc = struct {
 
     /// IPC Send FIFO
     /// Write-Only
-    pub fn send(self: *@This(), comptime src: Source, value: u32) void {
-        switch (src) {
+    pub fn send(self: *@This(), comptime proc: System.Process, value: u32) void {
+        switch (proc) {
             .nds7 => {
                 if (!self._nds7.cnt.enable_fifos.read()) return;
                 self._nds7.fifo.push(value) catch unreachable; // see early return above
@@ -173,8 +171,8 @@ const Ipc = struct {
 
     /// IPC Receive FIFO
     /// Read-Only
-    pub fn recv(self: *@This(), comptime src: Source) u32 {
-        switch (src) {
+    pub fn recv(self: *@This(), comptime proc: System.Process) u32 {
+        switch (proc) {
             .nds7 => {
                 const enabled = self._nds7.cnt.enable_fifos.read();
                 const val_opt = if (enabled) self._nds9.fifo.pop() else self._nds9.fifo.peek();
