@@ -73,12 +73,9 @@ fn Engine(comptime kind: EngineKind) type {
                                 // TODO: Draw Sprites
 
                                 inline for (0..4) |i| {
-                                    if (layer == self.bg[i].cnt.priority.read() and (bg_enable >> i) & 1 == 1)
-                                        self.drawBackground(i, bus);
+                                    if (layer == self.bg[i].cnt.priority.read() and (bg_enable >> i) & 1 == 1) self.drawBackground(i, bus);
                                 }
                             }
-
-                            // TODO: IN ZBA we calculate the base address of the emu framebuffer to pass in
 
                             const buf = switch (kind) {
                                 .a => if (bus.ppu.io.powcnt.display_swap.read()) fb.top(.back) else fb.btm(.back),
@@ -90,7 +87,7 @@ fn Engine(comptime kind: EngineKind) type {
                                 break :blk rgba_ptr[width * scanline ..][0..width];
                             };
 
-                            self.renderTextMode(scanline_buf);
+                            self.renderTextMode(bus.dbgRead(u16, 0x0500_0000), scanline_buf);
                         },
                         else => |mode| {
                             log.err("TODO: Implement Mode {}", .{mode});
@@ -151,17 +148,17 @@ fn Engine(comptime kind: EngineKind) type {
             const vofs: u32 = self.bg[layer].vofs.offset.read();
             const hofs: u32 = self.bg[layer].hofs.offset.read();
 
-            const y = vofs + bus.ppu.io.nds9.vcount.scanline.read();
+            const y: u32 = vofs + bus.ppu.io.nds9.vcount.scanline.read();
 
-            for (0..width) |_i| {
-                const i: u32 = @intCast(_i);
+            for (0..width) |idx| {
+                const i: u32 = @intCast(idx);
                 const x = hofs + i;
 
                 // TODO: Windowing
 
                 // Grab the Screen Entry from VRAM
-                const entry_addr = 0x0600_0000 + screen_base + tilemapOffset(size, x, y);
-                const entry: bg.Screen.Entry = @bitCast(bus.read(u16, entry_addr));
+                const entry_addr = screen_base + tilemapOffset(size, x, y);
+                const entry: bg.Screen.Entry = @bitCast(bus.read(u16, 0x0600_0000 + entry_addr));
 
                 // Calculate the Address of the Tile in the designated Charblock
                 // We also take this opportunity to flip tiles if necessary
@@ -178,9 +175,11 @@ fn Engine(comptime kind: EngineKind) type {
                 // If we're in 8bpp, then the tile value is an index into the palette,
                 // If we're in 4bpp, we have to account for a pal bank value in the Screen entry
                 // and then we can index the palette
-                const pal_id: u16 = if (!is_8bpp) get4bppTilePalette(entry.pal_bank.read(), col, tile) else tile;
+                const pal_addr: u32 = if (!is_8bpp) get4bppTilePalette(entry.pal_bank.read(), col, tile) else tile;
 
-                if (pal_id != 0) self.drawBackgroundPixel(layer, i, bus.read(u16, @as(u32, 0x0500_0000) + pal_id * 2));
+                if (pal_addr != 0) {
+                    self.drawBackgroundPixel(layer, i, bus.read(u16, 0x0500_0000 + pal_addr * 2));
+                }
             }
         }
 
@@ -191,17 +190,16 @@ fn Engine(comptime kind: EngineKind) type {
             return (@as(u8, pal_bank) << 4) | nybble_tile;
         }
 
-        fn renderTextMode(self: *@This(), frame_buf: []u32) void {
-            for (self.scanline.top(), 0..) |maybe_top, i| {
-                const maybe_btm = self.scanline.btm()[i];
+        fn renderTextMode(self: *@This(), backdrop: u16, frame_buf: []u32) void {
+            for (self.scanline.top(), self.scanline.btm(), frame_buf) |maybe_top, maybe_btm, *rgba| {
                 _ = maybe_btm;
 
                 const bgr555 = switch (maybe_top) {
                     .set => |px| px,
-                    else => 0xAAAA,
+                    else => backdrop,
                 };
 
-                frame_buf[i] = rgba888(bgr555);
+                rgba.* = rgba888(bgr555);
             }
 
             self.scanline.reset();
