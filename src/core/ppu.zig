@@ -9,6 +9,7 @@ const EngineA = @import("ppu/engine.zig").EngineA;
 const EngineB = @import("ppu/engine.zig").EngineB;
 
 const dma7 = @import("nds7/dma.zig");
+const dma9 = @import("nds9/dma.zig");
 
 const handleInterrupt = @import("emu.zig").handleInterrupt;
 
@@ -76,7 +77,9 @@ pub const Ppu = struct {
             handleInterrupt(.nds7, system.arm7tdmi);
         }
 
-        // TODO: Run DMAs on HBlank
+        if (!self.io.nds9.dispstat.vblank.read()) { // ensure we aren't in VBlank
+            dma9.onHblank(system.bus9);
+        }
 
         self.io.nds9.dispstat.hblank.set();
         self.io.nds7.dispstat.hblank.set();
@@ -165,6 +168,8 @@ pub const Ppu = struct {
             // TODO: Affine BG Latches
 
             dma7.onVblank(system.bus7);
+            dma9.onVblank(system.bus9);
+
             // TODO: VBlank DMA9 Transfers
         }
 

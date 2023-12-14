@@ -8,6 +8,8 @@ const Wram = @import("../emu.zig").Wram;
 const Bios = @import("Bios.zig");
 const forceAlign = @import("../emu.zig").forceAlign;
 
+const Controllers = @import("dma.zig").Controllers;
+
 const Allocator = std.mem.Allocator;
 
 const Mode = enum { normal, debug };
@@ -20,6 +22,8 @@ main: *[4 * MiB]u8,
 wram: *Wram,
 makeshift_palram: *[2 * KiB]u8,
 scheduler: *Scheduler,
+
+dma: Controllers = .{},
 
 io: io.Io,
 ppu: Ppu,

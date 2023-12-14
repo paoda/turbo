@@ -6,6 +6,7 @@ const Scheduler = @import("Scheduler.zig");
 const Allocator = std.mem.Allocator;
 
 const dma7 = @import("nds7/dma.zig");
+const dma9 = @import("nds9/dma.zig");
 
 /// Load a NDS Cartridge
 ///
@@ -112,7 +113,7 @@ pub fn runFrame(scheduler: *Scheduler, system: System) void {
         switch (isHalted(system)) {
             .both => scheduler.tick = scheduler.peekTimestamp(),
             inline else => |halt| {
-                if (comptime halt != .arm9) {
+                if (!dma9.step(system.arm946es) and comptime halt != .arm9) {
                     system.arm946es.step();
                     system.arm946es.step();
                 }
@@ -125,15 +126,6 @@ pub fn runFrame(scheduler: *Scheduler, system: System) void {
 
         if (scheduler.check()) |ev| {
             const late = scheduler.tick - ev.tick;
-
-            // this is kinda really jank lol
-            const bus_ptr: ?*anyopaque = switch (ev.kind) {
-                .heat_death => null,
-                .nds7 => system.bus7,
-                .nds9 => system.bus9,
-            };
-            _ = bus_ptr;
-
             scheduler.handle(system, ev, late);
         }
     }

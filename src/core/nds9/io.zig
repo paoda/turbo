@@ -10,6 +10,8 @@ const masks = @import("../io.zig").masks;
 const IntEnable = @import("../io.zig").IntEnable;
 const IntRequest = @import("../io.zig").IntEnable;
 
+const dma = @import("dma.zig");
+
 const sext = @import("../../util.zig").sext;
 const shift = @import("../../util.zig").shift;
 
@@ -47,7 +49,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
     return switch (T) {
         u32 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DC => warn("TODO: impl DMA", .{}),
+            0x0400_00B0...0x0400_00DC => dma.read(T, &bus.dma, address) orelse 0x0000_0000,
             0x0400_00E0...0x0400_00EC => warn("TODO: impl DMA fill", .{}),
 
             // Timers
@@ -71,7 +73,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
         },
         u16 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DE => warn("TODO: impl DMA", .{}),
+            0x0400_00B0...0x0400_00DE => dma.read(T, &bus.dma, address) orelse 0x0000,
             0x0400_00E0...0x0400_00EE => warn("TODO: impl DMA fill", .{}),
 
             // Timers
@@ -104,7 +106,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
         },
         u8 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DF => warn("TODO: impl DMA", .{}),
+            0x0400_00B0...0x0400_00DF => dma.read(T, &bus.dma, address) orelse 0x00,
             0x0400_00E0...0x0400_00EF => warn("TODO: impl DMA fill", .{}),
 
             // Timers
@@ -126,7 +128,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
         u32 => switch (address) {
 
             // DMA Transfers
-            0x0400_00B0...0x0400_00DC => log.warn("TODO: impl DMA", .{}),
+            0x0400_00B0...0x0400_00DC => dma.write(T, &bus.dma, address, value),
             0x0400_00E0...0x0400_00EC => log.warn("TODO: impl DMA fill", .{}),
 
             // Timers
@@ -174,7 +176,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0004 => bus.ppu.io.nds9.dispstat.raw = value,
 
             // DMA Transfers
-            0x0400_00B0...0x0400_00DE => log.warn("TODO: impl DMA", .{}),
+            0x0400_00B0...0x0400_00DE => dma.write(T, &bus.dma, address, value),
             0x0400_00E0...0x0400_00EE => log.warn("TODO: impl DMA fill", .{}),
 
             // Timers
@@ -214,7 +216,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
         },
         u8 => switch (address) {
             // DMA Transfers
-            0x0400_00B0...0x0400_00DF => log.warn("TODO: impl DMA", .{}),
+            0x0400_00B0...0x0400_00DF => dma.write(T, &bus.dma, address, value),
             0x0400_00E0...0x0400_00EF => log.warn("TODO: impl DMA fill", .{}),
 
             // Timers
@@ -527,3 +529,14 @@ const BackgroundOffset = extern union {
 
 pub const Hofs = BackgroundOffset;
 pub const Vofs = BackgroundOffset;
+
+pub const DmaCnt = extern union {
+    dad_adj: Bitfield(u16, 5, 2),
+    sad_adj: Bitfield(u16, 7, 2),
+    repeat: Bit(u16, 9),
+    transfer_type: Bit(u16, 10),
+    start_timing: Bitfield(u16, 11, 3),
+    irq: Bit(u16, 14),
+    enabled: Bit(u16, 15),
+    raw: u16,
+};
