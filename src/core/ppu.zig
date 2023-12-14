@@ -8,6 +8,8 @@ const Vram = @import("ppu/Vram.zig");
 const EngineA = @import("ppu/engine.zig").EngineA;
 const EngineB = @import("ppu/engine.zig").EngineB;
 
+const dma7 = @import("nds7/dma.zig");
+
 const handleInterrupt = @import("emu.zig").handleInterrupt;
 
 pub const screen_width = 256;
@@ -161,7 +163,9 @@ pub const Ppu = struct {
             self.io.nds7.dispstat.vblank.set();
 
             // TODO: Affine BG Latches
-            // TODO: VBlank DMA Transfers
+
+            dma7.onVblank(system.bus7);
+            // TODO: VBlank DMA9 Transfers
         }
 
         if (scanline == 262) {

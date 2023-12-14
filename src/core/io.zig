@@ -325,6 +325,11 @@ pub const IntEnable = extern union {
     hblank: Bit(u32, 1),
     coincidence: Bit(u32, 2),
 
+    dma0: Bit(u32, 8),
+    dma1: Bit(u32, 9),
+    dma2: Bit(u32, 10),
+    dma3: Bit(u32, 11),
+
     ipcsync: Bit(u32, 16),
     ipc_send_empty: Bit(u32, 17),
     ipc_recv_not_empty: Bit(u32, 18),

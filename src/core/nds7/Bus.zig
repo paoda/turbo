@@ -8,6 +8,8 @@ const Vram = @import("../ppu/Vram.zig");
 const Bios = @import("Bios.zig");
 const forceAlign = @import("../emu.zig").forceAlign;
 
+const Controllers = @import("dma.zig").Controllers;
+
 const Allocator = std.mem.Allocator;
 
 const Mode = enum { normal, debug };
@@ -21,6 +23,8 @@ main: *[4 * MiB]u8,
 shr_wram: *Wram,
 wram: *[64 * KiB]u8,
 vram: *Vram,
+
+dma: Controllers = .{},
 
 io: io.Io,
 bios: Bios,

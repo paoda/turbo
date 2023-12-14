@@ -5,6 +5,8 @@ const Scheduler = @import("Scheduler.zig");
 
 const Allocator = std.mem.Allocator;
 
+const dma7 = @import("nds7/dma.zig");
+
 /// Load a NDS Cartridge
 ///
 /// intended to be used immediately after Emulator initialization
@@ -115,8 +117,9 @@ pub fn runFrame(scheduler: *Scheduler, system: System) void {
                     system.arm946es.step();
                 }
 
-                if (comptime halt != .arm7)
+                if (!dma7.step(system.arm7tdmi) and comptime halt != .arm7) {
                     system.arm7tdmi.step();
+                }
             },
         }
 
