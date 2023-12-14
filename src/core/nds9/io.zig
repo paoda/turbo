@@ -18,6 +18,8 @@ const shift = @import("../../util.zig").shift;
 const log = std.log.scoped(.nds9_io);
 
 pub const Io = struct {
+    const fill_len = 0x10 * @sizeOf(u32);
+
     shr: *SharedCtx.Io,
 
     /// Interrupt Master Enable
@@ -40,6 +42,9 @@ pub const Io = struct {
     div: Divisor = .{},
     sqrt: SquareRootUnit = .{},
 
+    // TODO: move somewhere else?
+    dma_fill: [fill_len]u8 = [_]u8{0} ** fill_len,
+
     pub fn init(io: *SharedCtx.Io) @This() {
         return .{ .shr = io };
     }
@@ -50,7 +55,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
         u32 => switch (address) {
             // DMA Transfers
             0x0400_00B0...0x0400_00DC => dma.read(T, &bus.dma, address) orelse 0x0000_0000,
-            0x0400_00E0...0x0400_00EC => warn("TODO: impl DMA fill", .{}),
+            0x0400_00E0...0x0400_00EC => std.mem.readIntLittle(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)]),
 
             // Timers
             0x0400_0100...0x0400_010C => warn("TODO: impl timer", .{}),
@@ -74,7 +79,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
         u16 => switch (address) {
             // DMA Transfers
             0x0400_00B0...0x0400_00DE => dma.read(T, &bus.dma, address) orelse 0x0000,
-            0x0400_00E0...0x0400_00EE => warn("TODO: impl DMA fill", .{}),
+            0x0400_00E0...0x0400_00EE => std.mem.readIntLittle(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)]),
 
             // Timers
             0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
@@ -107,7 +112,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
         u8 => switch (address) {
             // DMA Transfers
             0x0400_00B0...0x0400_00DF => dma.read(T, &bus.dma, address) orelse 0x00,
-            0x0400_00E0...0x0400_00EF => warn("TODO: impl DMA fill", .{}),
+            0x0400_00E0...0x0400_00EF => std.mem.readIntLittle(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)]),
 
             // Timers
             0x0400_0100...0x0400_010F => warn("TODO: impl timer", .{}),
@@ -129,7 +134,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // DMA Transfers
             0x0400_00B0...0x0400_00DC => dma.write(T, &bus.dma, address, value),
-            0x0400_00E0...0x0400_00EC => log.warn("TODO: impl DMA fill", .{}),
+            0x0400_00E0...0x0400_00EC => std.mem.writeIntLittle(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)], value),
 
             // Timers
             0x0400_0100...0x0400_010C => log.warn("TODO: impl timer", .{}),
@@ -177,7 +182,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
             // DMA Transfers
             0x0400_00B0...0x0400_00DE => dma.write(T, &bus.dma, address, value),
-            0x0400_00E0...0x0400_00EE => log.warn("TODO: impl DMA fill", .{}),
+            0x0400_00E0...0x0400_00EE => std.mem.writeIntLittle(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)], value),
 
             // Timers
             0x0400_0100...0x0400_010E => log.warn("TODO: impl timer", .{}),
@@ -217,7 +222,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
         u8 => switch (address) {
             // DMA Transfers
             0x0400_00B0...0x0400_00DF => dma.write(T, &bus.dma, address, value),
-            0x0400_00E0...0x0400_00EF => log.warn("TODO: impl DMA fill", .{}),
+            0x0400_00E0...0x0400_00EF => std.mem.writeIntLittle(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)], value),
 
             // Timers
             0x0400_0100...0x0400_010F => log.warn("TODO: impl timer", .{}),

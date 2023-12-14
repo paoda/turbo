@@ -9,9 +9,7 @@ const subset = @import("../../util.zig").subset;
 
 const handleInterrupt = @import("../emu.zig").handleInterrupt;
 
-const log = std.log.scoped(.nds7_dma_transfer);
-
-// TODO: Fill Data
+const log = std.log.scoped(.nds9_dma_transfer);
 
 pub const Controllers = struct {
     Controller(0) = Controller(0){},
