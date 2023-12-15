@@ -214,6 +214,16 @@ fn Controller(comptime id: u2) type {
 
                 // Only a Start Timing of 00 has a DMA Transfer immediately begin
                 self.in_progress = new.start_timing.read() == 0b00;
+
+                // this is just for debug purposes
+                const start_timing: Kind = @enumFromInt(new.start_timing.read());
+
+                switch (start_timing) {
+                    .immediate, .vblank => {},
+                    else => log.err("TODO: Implement DMA({}) {s} mode", .{ id, @tagName(start_timing) }),
+                }
+
+                log.debug("configured {s} transfer from 0x{X:0>8} -> 0x{X:0>8} ({} words) for DMA{}", .{ @tagName(start_timing), self.sad_latch, self.dad_latch, self._word_count, id });
             }
 
             self.cnt.raw = halfword;
