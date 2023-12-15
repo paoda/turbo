@@ -14,6 +14,7 @@ const ClapResult = clap.Result(clap.Help, &cli_params, clap.parsers.default);
 const cli_params = clap.parseParamsComptime(
     \\-h, --help        Display this help and exit.
     \\-f, --firm <str>  Path to NDS Firmware Directory
+    \\--gdb              Run Turbo in GDB Mode
     \\<str>             Path to the NDS ROM
     \\
 );

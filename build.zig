@@ -1,8 +1,9 @@
 const std = @import("std");
 
-const Sdk = @import("lib/SDL.zig/Sdk.zig");
+const Sdk = @import("lib/SDL.zig/build.zig");
 const zgui = @import("lib/zgui/build.zig");
 const arm32 = @import("lib/arm32/build.zig");
+const gdbstub = @import("lib/zba-gdbstub/build.zig");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -29,6 +30,7 @@ pub fn build(b: *std.Build) void {
     });
 
     exe.addModule("arm32", arm32.module(b));
+    exe.addModule("gdbstub", gdbstub.module(b));
     exe.addModule("zig-clap", b.dependency("zig-clap", .{}).module("clap"));
 
     exe.addAnonymousModule("bitfield", .{ .source_file = .{ .path = "lib/bitfield.zig" } }); // https://github.com/FlorenceOS/

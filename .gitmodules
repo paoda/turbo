@@ -7,3 +7,6 @@
 [submodule "lib/arm32"]
 	path = lib/arm32
 	url = https://git.musuka.dev/paoda/arm32.git
+[submodule "lib/zba-gdbstub"]
+	path = lib/zba-gdbstub
+	url = https://git.musuka.dev/paoda/zba-gdbstub
