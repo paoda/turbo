@@ -5,6 +5,8 @@ const Scheduler = @import("Scheduler.zig");
 const System = @import("emu.zig").System;
 
 const Vram = @import("ppu/Vram.zig");
+const Oam = @import("ppu/Oam.zig");
+
 const EngineA = @import("ppu/engine.zig").EngineA;
 const EngineB = @import("ppu/engine.zig").EngineB;
 
@@ -23,6 +25,9 @@ pub const Ppu = struct {
     fb: FrameBuffer,
 
     vram: *Vram,
+
+    // FIXME: do I need a pointer here?
+    oam: *Oam,
 
     engines: struct { EngineA, EngineB },
 
@@ -49,12 +54,19 @@ pub const Ppu = struct {
             .fb = try FrameBuffer.init(allocator),
             .engines = .{ try EngineA.init(allocator), try EngineB.init(allocator) },
             .vram = vram,
+            .oam = blk: {
+                var oam = try allocator.create(Oam);
+                oam.init();
+
+                break :blk oam;
+            },
         };
     }
 
     pub fn deinit(self: @This(), allocator: Allocator) void {
         self.fb.deinit(allocator);
         inline for (self.engines) |eng| eng.deinit(allocator);
+        allocator.destroy(self.oam);
     }
 
     pub fn drawScanline(self: *@This(), bus: *System.Bus9) void {

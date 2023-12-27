@@ -77,11 +77,12 @@ fn _read(self: *@This(), comptime T: type, comptime mode: Mode, address: u32) T 
     }
 
     return switch (aligned_addr) {
-        0x0200_0000...0x02FF_FFFF => readInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count]),
+        0x0200_0000...0x02FF_FFFF => readInt(T, self.main[aligned_addr & (4 * MiB - 1) ..][0..byte_count]),
         0x0300_0000...0x03FF_FFFF => self.wram.read(T, .nds9, aligned_addr),
         0x0400_0000...0x04FF_FFFF => io.read(self, T, aligned_addr),
         0x0500_0000...0x05FF_FFFF => readInt(T, self.makeshift_palram[aligned_addr & (2 * KiB - 1) ..][0..@sizeOf(T)]),
         0x0600_0000...0x06FF_FFFF => self.ppu.vram.read(T, .nds9, aligned_addr),
+        0x0700_0000...0x07FF_FFFF => readInt(T, self.ppu.oam.buf[aligned_addr & (2 * KiB - 1) ..][0..byte_count]),
         0xFFFF_0000...0xFFFF_FFFF => self.bios.read(T, address),
         else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
     };
@@ -108,11 +109,12 @@ fn _write(self: *@This(), comptime T: type, comptime mode: Mode, address: u32, v
     }
 
     switch (aligned_addr) {
-        0x0200_0000...0x02FF_FFFF => writeInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count], value),
+        0x0200_0000...0x02FF_FFFF => writeInt(T, self.main[aligned_addr & (4 * MiB - 1) ..][0..byte_count], value),
         0x0300_0000...0x03FF_FFFF => self.wram.write(T, .nds9, aligned_addr, value),
         0x0400_0000...0x04FF_FFFF => io.write(self, T, aligned_addr, value),
         0x0500_0000...0x05FF_FFFF => writeInt(T, self.makeshift_palram[aligned_addr & (2 * KiB - 1) ..][0..@sizeOf(T)], value),
         0x0600_0000...0x06FF_FFFF => self.ppu.vram.write(T, .nds9, aligned_addr, value),
+        0x0700_0000...0x07FF_FFFF => writeInt(T, self.ppu.oam.buf[aligned_addr & (2 * KiB - 1) ..][0..@sizeOf(T)], value),
         0xFFFF_0000...0xFFFF_FFFF => self.bios.write(T, address, value),
         else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
     }

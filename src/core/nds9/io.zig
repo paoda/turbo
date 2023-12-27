@@ -77,6 +77,8 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
         },
         u16 => switch (address) {
+            0x0400_0006 => bus.ppu.io.nds9.vcount.raw,
+
             // DMA Transfers
             0x0400_00B0...0x0400_00DE => dma.read(T, &bus.dma, address) orelse 0x0000,
             0x0400_00E0...0x0400_00EE => std.mem.readIntLittle(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)]),
@@ -131,6 +133,14 @@ const subset = @import("../../util.zig").subset;
 pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
     switch (T) {
         u32 => switch (address) {
+            0x0400_0008 => {
+                bus.ppu.engines[0].bg[0].cnt.raw = @truncate(value >> 0); // 0x0400_0008
+                bus.ppu.engines[0].bg[1].cnt.raw = @truncate(value >> 16); // 0x0400_000A
+            },
+            0x0400_000C => {
+                bus.ppu.engines[0].bg[2].cnt.raw = @truncate(value >> 0); // 0x0400_000A
+                bus.ppu.engines[0].bg[3].cnt.raw = @truncate(value >> 16); // 0x0400_000C
+            },
 
             // DMA Transfers
             0x0400_00B0...0x0400_00DC => dma.write(T, &bus.dma, address, value),
@@ -154,6 +164,16 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0208 => bus.io.ime = value & 1 == 1,
             0x0400_0210 => bus.io.ie.raw = value,
             0x0400_0214 => bus.io.irq.raw &= ~value,
+
+            0x0400_0244 => {
+                bus.ppu.vram.io.cnt_e.raw = @truncate(value >> 0); // 0x0400_0244
+                bus.ppu.vram.io.cnt_f.raw = @truncate(value >> 8); // 0x0400_0245
+                bus.ppu.vram.io.cnt_g.raw = @truncate(value >> 16); // 0x0400_0246
+                bus.io.shr.wramcnt.raw = @truncate(value >> 24); // 0x0400_0247
+
+                bus.ppu.vram.update();
+                bus.wram.update(bus.io.shr.wramcnt);
+            },
 
             0x0400_0290, 0x0400_0294 => {
                 bus.io.div.numerator = subset(u64, u32, address, bus.io.div.numerator, value);
