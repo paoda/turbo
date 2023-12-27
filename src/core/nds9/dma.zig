@@ -219,7 +219,7 @@ fn Controller(comptime id: u2) type {
                 const start_timing: Kind = @enumFromInt(new.start_timing.read());
 
                 switch (start_timing) {
-                    .immediate, .vblank => {},
+                    .immediate, .vblank, .hblank => {},
                     else => log.err("TODO: Implement DMA({}) {s} mode", .{ id, @tagName(start_timing) }),
                 }
 

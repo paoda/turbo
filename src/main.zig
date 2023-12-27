@@ -65,6 +65,8 @@ pub fn main() !void {
     const rom_title = try emu.load(allocator, system, rom_path);
     if (firm_path) |path| try emu.loadFirm(allocator, system, path);
 
+    emu.fastBoot(system);
+
     var ui = try Ui.init(allocator);
     defer ui.deinit(allocator);
 

@@ -65,6 +65,14 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_0210 => bus.io.ie.raw,
             0x0400_0214 => bus.io.irq.raw,
 
+            // zig fmt: off
+            0x0400_0240 => @as(u32, bus.ppu.vram.io.cnt_d.raw) << 24
+                | @as(u32, bus.ppu.vram.io.cnt_c.raw) << 16
+                | @as(u32, bus.ppu.vram.io.cnt_b.raw) << 8
+                | bus.ppu.vram.io.cnt_a.raw << 0,
+            // zig fmt: on
+
+            0x0400_0280 => bus.io.div.cnt.raw,
             0x0400_02A0, 0x0400_02A4 => @truncate(bus.io.div.result >> shift(u64, address)),
             0x0400_02A8, 0x0400_02AC => @truncate(bus.io.div.remainder >> shift(u64, address)),
             0x0400_02B4 => @truncate(bus.io.sqrt.result),
@@ -133,6 +141,8 @@ const subset = @import("../../util.zig").subset;
 pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
     switch (T) {
         u32 => switch (address) {
+            0x0400_0000 => bus.ppu.engines[0].dispcnt.raw = value,
+            0x0400_0004 => bus.ppu.io.nds9.dispstat.raw = @truncate(value),
             0x0400_0008 => {
                 bus.ppu.engines[0].bg[0].cnt.raw = @truncate(value >> 0); // 0x0400_0008
                 bus.ppu.engines[0].bg[1].cnt.raw = @truncate(value >> 16); // 0x0400_000A
@@ -140,6 +150,22 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_000C => {
                 bus.ppu.engines[0].bg[2].cnt.raw = @truncate(value >> 0); // 0x0400_000A
                 bus.ppu.engines[0].bg[3].cnt.raw = @truncate(value >> 16); // 0x0400_000C
+            },
+            0x00400_0010 => {
+                bus.ppu.engines[0].bg[0].hofs.raw = @truncate(value >> 0); // 0x0400_0010
+                bus.ppu.engines[0].bg[0].vofs.raw = @truncate(value >> 16); // 0x0400_0012
+            },
+            0x00400_0014 => {
+                bus.ppu.engines[0].bg[1].hofs.raw = @truncate(value >> 0); // 0x0400_0014
+                bus.ppu.engines[0].bg[1].vofs.raw = @truncate(value >> 16); // 0x0400_0016
+            },
+            0x00400_0018 => {
+                bus.ppu.engines[0].bg[2].hofs.raw = @truncate(value >> 0); // 0x0400_0018
+                bus.ppu.engines[0].bg[2].vofs.raw = @truncate(value >> 16); // 0x0400_001A
+            },
+            0x00400_001C => {
+                bus.ppu.engines[0].bg[3].hofs.raw = @truncate(value >> 0); // 0x0400_001C
+                bus.ppu.engines[0].bg[3].vofs.raw = @truncate(value >> 16); // 0x0400_001E
             },
 
             // DMA Transfers
@@ -149,22 +175,22 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             // Timers
             0x0400_0100...0x0400_010C => log.warn("TODO: impl timer", .{}),
 
-            0x0400_0000 => bus.ppu.engines[0].dispcnt.raw = value,
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds9, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds9, value),
             0x0400_0188 => bus.io.shr.ipc.send(.nds9, value),
+
+            0x0400_0208 => bus.io.ime = value & 1 == 1,
+            0x0400_0210 => bus.io.ie.raw = value,
+            0x0400_0214 => bus.io.irq.raw &= ~value,
 
             0x0400_0240 => {
                 bus.ppu.vram.io.cnt_a.raw = @truncate(value >> 0); // 0x0400_0240
                 bus.ppu.vram.io.cnt_b.raw = @truncate(value >> 8); // 0x0400_0241
                 bus.ppu.vram.io.cnt_c.raw = @truncate(value >> 16); // 0x0400_0242
                 bus.ppu.vram.io.cnt_d.raw = @truncate(value >> 24); // 0x0400_0243
+
+                bus.ppu.vram.update();
             },
-
-            0x0400_0208 => bus.io.ime = value & 1 == 1,
-            0x0400_0210 => bus.io.ie.raw = value,
-            0x0400_0214 => bus.io.irq.raw &= ~value,
-
             0x0400_0244 => {
                 bus.ppu.vram.io.cnt_e.raw = @truncate(value >> 0); // 0x0400_0244
                 bus.ppu.vram.io.cnt_f.raw = @truncate(value >> 8); // 0x0400_0245
@@ -173,6 +199,11 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
 
                 bus.ppu.vram.update();
                 bus.wram.update(bus.io.shr.wramcnt);
+            },
+
+            0x0400_0280 => {
+                bus.io.div.cnt.raw = value;
+                bus.io.div.schedule(bus.scheduler);
             },
 
             0x0400_0290, 0x0400_0294 => {
@@ -185,6 +216,11 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
                 bus.io.div.schedule(bus.scheduler);
             },
 
+            0x0400_02B0 => {
+                bus.io.sqrt.cnt.raw = value;
+                bus.io.sqrt.schedule(bus.scheduler);
+            },
+
             0x0400_02B8, 0x0400_02BC => {
                 bus.io.sqrt.param = subset(u64, u32, address, bus.io.sqrt.param, value);
                 bus.io.sqrt.schedule(bus.scheduler);
@@ -194,6 +230,30 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_0304 => bus.ppu.io.powcnt.raw = value,
 
             0x0400_1000 => bus.ppu.engines[1].dispcnt.raw = value,
+            0x0400_1008 => {
+                bus.ppu.engines[1].bg[0].cnt.raw = @truncate(value >> 0); // 0x0400_1008
+                bus.ppu.engines[1].bg[1].cnt.raw = @truncate(value >> 16); // 0x0400_100A
+            },
+            0x0400_100C => {
+                bus.ppu.engines[1].bg[2].cnt.raw = @truncate(value >> 0); // 0x0400_100A
+                bus.ppu.engines[1].bg[3].cnt.raw = @truncate(value >> 16); // 0x0400_100C
+            },
+            0x00400_1010 => {
+                bus.ppu.engines[1].bg[0].hofs.raw = @truncate(value >> 0); // 0x0400_1010
+                bus.ppu.engines[1].bg[0].vofs.raw = @truncate(value >> 16); // 0x0400_1012
+            },
+            0x00400_1014 => {
+                bus.ppu.engines[1].bg[1].hofs.raw = @truncate(value >> 0); // 0x0400_1014
+                bus.ppu.engines[1].bg[1].vofs.raw = @truncate(value >> 16); // 0x0400_1016
+            },
+            0x00400_1018 => {
+                bus.ppu.engines[1].bg[2].hofs.raw = @truncate(value >> 0); // 0x0400_1018
+                bus.ppu.engines[1].bg[2].vofs.raw = @truncate(value >> 16); // 0x0400_101A
+            },
+            0x00400_101C => {
+                bus.ppu.engines[1].bg[3].hofs.raw = @truncate(value >> 0); // 0x0400_101C
+                bus.ppu.engines[1].bg[3].vofs.raw = @truncate(value >> 16); // 0x0400_101E
+            },
 
             else => log.warn("unexpected: write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
         },

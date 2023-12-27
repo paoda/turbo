@@ -368,3 +368,38 @@ pub fn handleInterrupt(comptime proc: System.Process, cpu: *System.Cpu(proc)) vo
     cpu.r[15] = if (proc == .nds9) 0xFFFF_0018 else 0x0000_0018;
     cpu.pipe.reload(cpu);
 }
+
+pub fn fastBoot(system: System) void {
+    {
+        const Bank = System.Arm946es.Bank;
+
+        const cpu = system.arm946es;
+
+        // from advanDS
+        cpu.spsr = .{ .raw = 0x0000_000DF };
+
+        @memset(cpu.r[0..12], 0x0000_0000); // r0 -> r11 are zeroed
+        // TODO: r12, r14, and r15 are set to the entrypoint?
+        cpu.r[13] = 0x0300_2F7C; // FIXME: Why is there (!) in GBATEK?
+        cpu.bank.r[Bank.regIdx(.Irq, .R13)] = 0x0300_3F80;
+        cpu.bank.r[Bank.regIdx(.Supervisor, .R13)] = 0x0300_3FC0;
+        cpu.bank.spsr[Bank.spsrIdx(.Irq)] = .{ .raw = 0x0000_0000 };
+        cpu.bank.spsr[Bank.spsrIdx(.Supervisor)] = .{ .raw = 0x0000_0000 };
+    }
+    {
+        const Bank = System.Arm7tdmi.Bank;
+
+        const cpu = system.arm7tdmi;
+
+        // from advanDS
+        cpu.spsr = .{ .raw = 0x0000_000D3 };
+
+        @memset(cpu.r[0..12], 0x0000_0000); // r0 -> r11 are zeroed
+        // TODO: r12, r14, and r15 are set to the entrypoint?
+        cpu.r[13] = 0x0380_FD80;
+        cpu.bank.r[Bank.regIdx(.Irq, .R13)] = 0x0380_FF80;
+        cpu.bank.r[Bank.regIdx(.Supervisor, .R13)] = 0x0380_FFC0;
+        cpu.bank.spsr[Bank.spsrIdx(.Irq)] = .{ .raw = 0x0000_0000 };
+        cpu.bank.spsr[Bank.spsrIdx(.Supervisor)] = .{ .raw = 0x0000_0000 };
+    }
+}

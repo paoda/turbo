@@ -4,7 +4,7 @@ const log = std.log.scoped(.cp15);
 
 const panic_on_unimplemented: bool = false;
 
-control: u32 = 0x0005_2078,
+control: u32 = 0x0001_2078,
 dtcm_size_base: u32 = 0x0300_000A,
 itcm_size_base: u32 = 0x0000_0020,
 
