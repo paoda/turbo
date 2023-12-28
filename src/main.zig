@@ -68,11 +68,17 @@ pub fn main() !void {
 
     emu.fastBoot(system);
 
-    var ui = try Ui.init(allocator);
-    defer ui.deinit(allocator);
+    if (result.args.gdb == 0) {
+        var ui = try Ui.init(allocator);
+        defer ui.deinit(allocator);
 
-    ui.setTitle(rom_title);
-    try ui.run(&scheduler, system);
+        ui.setTitle(rom_title);
+        try ui.run(&scheduler, system);
+    } else {
+        var should_quit: std.atomic.Atomic(bool) = std.atomic.Atomic(bool).init(false);
+
+        try emu.debug.run(allocator, system, &scheduler, &should_quit);
+    }
 }
 
 fn handlePositional(result: ClapResult) ![]const u8 {

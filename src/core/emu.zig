@@ -403,3 +403,128 @@ pub fn fastBoot(system: System) void {
         cpu.bank.spsr[Bank.spsrIdx(.Supervisor)] = .{ .raw = 0x0000_0000 };
     }
 }
+
+pub const debug = struct {
+    const Interface = @import("gdbstub").Emulator;
+    const Server = @import("gdbstub").Server;
+    const AtomicBool = std.atomic.Atomic(bool);
+    const log = std.log.scoped(.gdbstub);
+
+    const nds7 = struct {
+        const target: []const u8 =
+            \\<target version="1.0">
+            \\    <architecture>armv4t</architecture>
+            \\    <feature name="org.gnu.gdb.arm.core">
+            \\        <reg name="r0" bitsize="32" type="uint32"/>
+            \\        <reg name="r1" bitsize="32" type="uint32"/>
+            \\        <reg name="r2" bitsize="32" type="uint32"/>
+            \\        <reg name="r3" bitsize="32" type="uint32"/>
+            \\        <reg name="r4" bitsize="32" type="uint32"/>
+            \\        <reg name="r5" bitsize="32" type="uint32"/>
+            \\        <reg name="r6" bitsize="32" type="uint32"/>
+            \\        <reg name="r7" bitsize="32" type="uint32"/>
+            \\        <reg name="r8" bitsize="32" type="uint32"/>
+            \\        <reg name="r9" bitsize="32" type="uint32"/>
+            \\        <reg name="r10" bitsize="32" type="uint32"/>
+            \\        <reg name="r11" bitsize="32" type="uint32"/>
+            \\        <reg name="r12" bitsize="32" type="uint32"/>
+            \\        <reg name="sp" bitsize="32" type="data_ptr"/>
+            \\        <reg name="lr" bitsize="32"/>
+            \\        <reg name="pc" bitsize="32" type="code_ptr"/>
+            \\
+            \\        <reg name="cpsr" bitsize="32" regnum="25"/>
+            \\    </feature>
+            \\</target>
+        ;
+
+        // Remember that a lot of memory regions are mirrored
+        const memory_map: []const u8 =
+            \\ <memory-map version="1.0">
+            \\     <memory type="rom" start="0x00000000" length="0x00004000"/>
+            \\     <memory type="ram" start="0x02000000" length="0x01000000"/>
+            \\     <memory type="ram" start="0x03000000" length="0x00800000"/>
+            \\     <memory type="ram" start="0x03800000" length="0x00800000"/>
+            \\     <memory type="ram" start="0x04000000" length="0x00100010"/>
+            \\     <memory type="ram" start="0x06000000" length="0x01000000"/>
+            \\     <memory type="rom" start="0x08000000" length="0x02000000"/>
+            \\     <memory type="rom" start="0x0A000000" length="0x01000000"/>
+            \\ </memory-map>
+        ;
+    };
+
+    // FIXME: for now, assume ARM7
+    pub const Wrapper = struct {
+        system: System,
+        scheduler: *Scheduler,
+
+        pub fn init(system: System, scheduler: *Scheduler) @This() {
+            return .{ .system = system, .scheduler = scheduler };
+        }
+
+        pub fn interface(self: *@This(), allocator: Allocator) Interface {
+            return Interface.init(allocator, self);
+        }
+
+        // FIXME: What about ICTM? DTCM?
+        pub fn read(self: *const @This(), addr: u32) u8 {
+            return self.system.bus7.dbgRead(u8, addr);
+        }
+
+        pub fn write(self: *@This(), addr: u32, value: u8) void {
+            self.system.bus7.dbgWrite(u8, addr, value);
+        }
+
+        pub fn registers(self: *const @This()) *[16]u32 {
+            return &self.system.arm7tdmi.r;
+        }
+
+        pub fn cpsr(self: *const @This()) u32 {
+            return self.system.arm7tdmi.cpsr.raw;
+        }
+
+        pub fn step(self: *@This()) void {
+            const scheduler = self.scheduler;
+            const system = self.system;
+
+            var did_step: bool = false;
+
+            // TODO: keep in lockstep with runFrame
+            while (true) {
+                if (did_step) break;
+
+                switch (isHalted(system)) {
+                    .both => scheduler.tick = scheduler.peekTimestamp(),
+                    inline else => |halt| {
+                        if (!dma9.step(system.arm946es) and comptime halt != .arm9) {
+                            system.arm946es.step();
+                            system.arm946es.step();
+                        }
+
+                        if (!dma7.step(system.arm7tdmi) and comptime halt != .arm7) {
+                            system.arm7tdmi.step();
+                            did_step = true;
+                        }
+                    },
+                }
+
+                if (scheduler.check()) |ev| {
+                    const late = scheduler.tick - ev.tick;
+                    scheduler.handle(system, ev, late);
+                }
+            }
+        }
+    };
+
+    pub fn run(allocator: Allocator, system: System, scheduler: *Scheduler, should_quit: *AtomicBool) !void {
+        var wrapper = Wrapper.init(system, scheduler);
+
+        var emu_interface = wrapper.interface(allocator);
+        defer emu_interface.deinit();
+
+        var server = try Server.init(emu_interface, .{ .target = nds7.target, .memory_map = nds7.memory_map });
+        defer server.deinit(allocator);
+
+        const thread = try std.Thread.spawn(.{}, Server.run, .{ &server, allocator, should_quit });
+        defer thread.join();
+    }
+};
