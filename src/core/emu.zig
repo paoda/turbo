@@ -452,71 +452,91 @@ pub const debug = struct {
         ;
     };
 
-    // FIXME: for now, assume ARM7
-    pub const Wrapper = struct {
-        system: System,
-        scheduler: *Scheduler,
+    pub fn Wrapper(comptime proc: System.Process) type {
+        return struct {
+            system: System,
+            scheduler: *Scheduler,
 
-        pub fn init(system: System, scheduler: *Scheduler) @This() {
-            return .{ .system = system, .scheduler = scheduler };
-        }
+            pub fn init(system: System, scheduler: *Scheduler) @This() {
+                return .{ .system = system, .scheduler = scheduler };
+            }
 
-        pub fn interface(self: *@This(), allocator: Allocator) Interface {
-            return Interface.init(allocator, self);
-        }
+            pub fn interface(self: *@This(), allocator: Allocator) Interface {
+                return Interface.init(allocator, self);
+            }
 
-        // FIXME: What about ICTM? DTCM?
-        pub fn read(self: *const @This(), addr: u32) u8 {
-            return self.system.bus7.dbgRead(u8, addr);
-        }
+            pub fn read(self: *const @This(), addr: u32) u8 {
+                const arm = switch (proc) {
+                    .nds7 => self.system.arm7tdmi,
+                    .nds9 => self.system.arm946es,
+                };
 
-        pub fn write(self: *@This(), addr: u32, value: u8) void {
-            self.system.bus7.dbgWrite(u8, addr, value);
-        }
+                return arm.dbgRead(u8, addr);
+            }
 
-        pub fn registers(self: *const @This()) *[16]u32 {
-            return &self.system.arm7tdmi.r;
-        }
+            pub fn write(self: *@This(), addr: u32, value: u8) void {
+                const arm = switch (proc) {
+                    .nds7 => self.system.arm7tdmi,
+                    .nds9 => self.system.arm946es,
+                };
 
-        pub fn cpsr(self: *const @This()) u32 {
-            return self.system.arm7tdmi.cpsr.raw;
-        }
+                return arm.dbgWrite(u8, addr, value);
+            }
 
-        pub fn step(self: *@This()) void {
-            const scheduler = self.scheduler;
-            const system = self.system;
+            pub fn registers(self: *const @This()) *[16]u32 {
+                const arm = switch (proc) {
+                    .nds7 => self.system.arm7tdmi,
+                    .nds9 => self.system.arm946es,
+                };
 
-            var did_step: bool = false;
+                return &arm.r;
+            }
 
-            // TODO: keep in lockstep with runFrame
-            while (true) {
-                if (did_step) break;
+            pub fn cpsr(self: *const @This()) u32 {
+                const arm = switch (proc) {
+                    .nds7 => self.system.arm7tdmi,
+                    .nds9 => self.system.arm946es,
+                };
 
-                switch (isHalted(system)) {
-                    .both => scheduler.tick = scheduler.peekTimestamp(),
-                    inline else => |halt| {
-                        if (!dma9.step(system.arm946es) and comptime halt != .arm9) {
-                            system.arm946es.step();
-                            system.arm946es.step();
-                        }
+                return arm.cpsr.raw;
+            }
 
-                        if (!dma7.step(system.arm7tdmi) and comptime halt != .arm7) {
-                            system.arm7tdmi.step();
-                            did_step = true;
-                        }
-                    },
-                }
+            pub fn step(self: *@This()) void {
+                const scheduler = self.scheduler;
+                const system = self.system;
 
-                if (scheduler.check()) |ev| {
-                    const late = scheduler.tick - ev.tick;
-                    scheduler.handle(system, ev, late);
+                var did_step: bool = false;
+
+                // TODO: keep in lockstep with runFrame
+                while (true) {
+                    if (did_step) break;
+
+                    switch (isHalted(system)) {
+                        .both => scheduler.tick = scheduler.peekTimestamp(),
+                        inline else => |halt| {
+                            if (!dma9.step(system.arm946es) and comptime halt != .arm9) {
+                                system.arm946es.step();
+                                system.arm946es.step();
+                            }
+
+                            if (!dma7.step(system.arm7tdmi) and comptime halt != .arm7) {
+                                system.arm7tdmi.step();
+                                did_step = true;
+                            }
+                        },
+                    }
+
+                    if (scheduler.check()) |ev| {
+                        const late = scheduler.tick - ev.tick;
+                        scheduler.handle(system, ev, late);
+                    }
                 }
             }
-        }
-    };
+        };
+    }
 
     pub fn run(allocator: Allocator, system: System, scheduler: *Scheduler, should_quit: *AtomicBool) !void {
-        var wrapper = Wrapper.init(system, scheduler);
+        var wrapper = Wrapper(.nds7).init(system, scheduler);
 
         var emu_interface = wrapper.interface(allocator);
         defer emu_interface.deinit();
