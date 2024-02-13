@@ -27,7 +27,7 @@ pub fn main() !void {
 
     const allocator = gpa.allocator();
 
-    const result = try clap.parse(clap.Help, &cli_params, clap.parsers.default, .{});
+    const result = try clap.parse(clap.Help, &cli_params, clap.parsers.default, .{ .allocator = allocator });
     defer result.deinit();
 
     const rom_path = try handlePositional(result);
@@ -75,7 +75,7 @@ pub fn main() !void {
         ui.setTitle(rom_title);
         try ui.run(&scheduler, system);
     } else {
-        var should_quit: std.atomic.Atomic(bool) = std.atomic.Atomic(bool).init(false);
+        var should_quit: std.atomic.Value(bool) = std.atomic.Value(bool).init(false);
 
         try emu.debug.run(allocator, system, &scheduler, &should_quit);
     }

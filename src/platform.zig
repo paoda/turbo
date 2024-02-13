@@ -33,7 +33,7 @@ pub const Ui = struct {
     state: imgui.State,
 
     pub fn init(allocator: Allocator) !Self {
-        var state = imgui.State{};
+        const state = imgui.State{};
 
         if (SDL.SDL_Init(SDL.SDL_INIT_VIDEO | SDL.SDL_INIT_EVENTS | SDL.SDL_INIT_AUDIO) < 0) panic();
         if (SDL.SDL_GL_SetAttribute(SDL.SDL_GL_CONTEXT_PROFILE_MASK, SDL.SDL_GL_CONTEXT_PROFILE_CORE) < 0) panic();

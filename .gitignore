@@ -3,3 +3,4 @@ zig-out/
 bin/
 doc/
 imgui.ini
+.build_config/

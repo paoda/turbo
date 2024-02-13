@@ -407,7 +407,7 @@ pub fn fastBoot(system: System) void {
 pub const debug = struct {
     const Interface = @import("gdbstub").Emulator;
     const Server = @import("gdbstub").Server;
-    const AtomicBool = std.atomic.Atomic(bool);
+    const AtomicBool = std.atomic.Value(bool);
     const log = std.log.scoped(.gdbstub);
 
     const nds7 = struct {

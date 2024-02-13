@@ -29,7 +29,6 @@ pub fn deinit(self: @This(), allocator: Allocator) void {
 
 // Note: Parts of 16MiB addrspace that aren't mapped to BIOS are typically undefined
 pub fn read(self: *const @This(), comptime T: type, address: u32) T {
-    const readInt = std.mem.readIntLittle;
     const byte_count = @divExact(@typeInfo(T).Int.bits, 8);
 
     // if (address >= len) return 0x0000_0000; // TODO: What is undefined actually?
@@ -39,7 +38,7 @@ pub fn read(self: *const @This(), comptime T: type, address: u32) T {
         @panic("TODO: ability to load in NDS7 BIOS just-in-time");
     };
 
-    return readInt(T, ptr[address & (len - 1) ..][0..byte_count]);
+    return std.mem.readInt(T, ptr[address & (len - 1) ..][0..byte_count], .little);
 }
 
 pub fn write(_: *const @This(), comptime T: type, address: u32, value: T) void {
