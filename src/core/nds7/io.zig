@@ -75,7 +75,9 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             // Timers
             0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
 
-            0x0400_0130 => bus.io.shr.keyinput.load(.Monotonic),
+            0x0400_0130 => bus.io.shr.input.keyinput().raw,
+            0x0400_0136 => bus.io.shr.input.extkeyin().raw,
+
             0x0400_0180 => @truncate(bus.io.shr.ipc._nds7.sync.raw),
             0x0400_0184 => @truncate(bus.io.shr.ipc._nds7.cnt.raw),
             else => warn("unexpected: read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),

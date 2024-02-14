@@ -14,7 +14,7 @@ pub const Io = struct {
     wramcnt: WramCnt = .{ .raw = 0x00 },
 
     // Read Only
-    keyinput: AtomicKeyInput = .{},
+    input: Input = .{},
 };
 
 fn warn(comptime format: []const u8, args: anytype) u0 {
@@ -413,24 +413,54 @@ pub const KeyInput = extern union {
     raw: u16,
 };
 
-const AtomicKeyInput = struct {
-    const Self = @This();
+pub const ExtKeyIn = extern union {
+    x: Bit(u16, 0),
+    y: Bit(u16, 1),
+    debug: Bit(u16, 3),
+    stylus: Bit(u16, 6),
+    hinge: Bit(u16, 7),
+    raw: u16,
+};
+
+const Input = struct {
     const AtomicOrder = std.builtin.AtomicOrder;
+    const AtomicRmwOp = std.builtin.AtomicRmwOp;
 
-    inner: KeyInput = .{ .raw = 0x03FF },
+    inner: u32 = 0x007F_03FF,
 
-    pub inline fn load(self: *const Self, comptime order: AtomicOrder) u16 {
-        return switch (order) {
-            .AcqRel, .Release => @compileError("not supported for atomic loads"),
-            else => @atomicLoad(u16, &self.inner.raw, order),
+    pub inline fn keyinput(self: *const Input) KeyInput {
+        const value = @atomicLoad(u32, &self.inner, .Monotonic);
+        return .{ .raw = @truncate(value) };
+    }
+
+    pub inline fn set_keyinput(self: *Input, comptime op: AtomicRmwOp, input: KeyInput) void {
+        const msked = switch (op) {
+            .And => 0xFFFF_FFFF & @as(u32, input.raw),
+            .Or => 0x0000_0000 | @as(u32, input.raw),
+            else => @compileError("not supported"),
         };
+
+        _ = @atomicRmw(u32, &self.inner, op, msked, .Monotonic);
     }
 
-    pub inline fn fetchOr(self: *Self, value: u16, comptime order: AtomicOrder) void {
-        _ = @atomicRmw(u16, &self.inner.raw, .Or, value, order);
+    pub inline fn extkeyin(self: *const Input) ExtKeyIn {
+        const value = @atomicLoad(u32, &self.inner, .Monotonic);
+        const shifted: u16 = @truncate(value >> 16);
+
+        return .{ .raw = shifted | 0b00110100 }; // bits 2, 4, 5 are always set
     }
 
-    pub inline fn fetchAnd(self: *Self, value: u16, comptime order: AtomicOrder) void {
-        _ = @atomicRmw(u16, &self.inner.raw, .And, value, order);
+    pub inline fn set_extkeyin(self: *Input, comptime op: AtomicRmwOp, input: ExtKeyIn) void {
+        const msked = switch (op) {
+            .And => 0xFFFF_FFFF & (@as(u32, ~input.raw) << 16),
+            .Or => 0x0000_0000 | (@as(u32, input.raw) << 16),
+            else => @compileError("not supported"),
+        };
+
+        _ = @atomicRmw(u32, &self.inner, op, msked, .Monotonic);
+    }
+
+    pub inline fn set(self: *Input, comptime op: AtomicRmwOp, value: u32) void {
+        _ = @atomicRmw(u32, &self.inner, op, value, .Monotonic);
     }
 };

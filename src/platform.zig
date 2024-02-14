@@ -9,6 +9,7 @@ const emu = @import("core/emu.zig");
 
 const System = @import("core/emu.zig").System;
 const KeyInput = @import("core/io.zig").KeyInput;
+const ExtKeyIn = @import("core/io.zig").ExtKeyIn;
 const Scheduler = @import("core/Scheduler.zig");
 
 const Allocator = std.mem.Allocator;
@@ -125,44 +126,54 @@ pub const Ui = struct {
                     SDL.SDL_KEYDOWN => {
                         // TODO: Make use of compare_and_xor?
                         const key_code = event.key.keysym.sym;
+
                         var keyinput: KeyInput = .{ .raw = 0x0000 };
+                        var extkeyin: ExtKeyIn = .{ .raw = 0x0000 };
 
                         switch (key_code) {
                             SDL.SDLK_UP => keyinput.up.set(),
                             SDL.SDLK_DOWN => keyinput.down.set(),
                             SDL.SDLK_LEFT => keyinput.left.set(),
                             SDL.SDLK_RIGHT => keyinput.right.set(),
-                            SDL.SDLK_x => keyinput.a.set(),
-                            SDL.SDLK_z => keyinput.b.set(),
+                            SDL.SDLK_c => keyinput.a.set(),
+                            SDL.SDLK_x => keyinput.b.set(),
+                            SDL.SDLK_d => extkeyin.x.set(),
+                            SDL.SDLK_s => extkeyin.y.set(),
                             SDL.SDLK_a => keyinput.shoulder_l.set(),
-                            SDL.SDLK_s => keyinput.shoulder_r.set(),
+                            SDL.SDLK_f => keyinput.shoulder_r.set(),
                             SDL.SDLK_RETURN => keyinput.start.set(),
                             SDL.SDLK_RSHIFT => keyinput.select.set(),
                             else => {},
                         }
 
-                        system.bus9.io.shr.keyinput.fetchAnd(~keyinput.raw, .Monotonic);
+                        const input = (@as(u32, extkeyin.raw) << 16) | keyinput.raw;
+                        system.bus9.io.shr.input.set(.And, ~input);
                     },
                     SDL.SDL_KEYUP => {
                         // TODO: Make use of compare_and_xor?
                         const key_code = event.key.keysym.sym;
+
                         var keyinput: KeyInput = .{ .raw = 0x0000 };
+                        var extkeyin: ExtKeyIn = .{ .raw = 0x0000 };
 
                         switch (key_code) {
                             SDL.SDLK_UP => keyinput.up.set(),
                             SDL.SDLK_DOWN => keyinput.down.set(),
                             SDL.SDLK_LEFT => keyinput.left.set(),
                             SDL.SDLK_RIGHT => keyinput.right.set(),
-                            SDL.SDLK_x => keyinput.a.set(),
-                            SDL.SDLK_z => keyinput.b.set(),
+                            SDL.SDLK_c => keyinput.a.set(),
+                            SDL.SDLK_x => keyinput.b.set(),
+                            SDL.SDLK_d => extkeyin.x.set(),
+                            SDL.SDLK_s => extkeyin.y.set(),
                             SDL.SDLK_a => keyinput.shoulder_l.set(),
-                            SDL.SDLK_s => keyinput.shoulder_r.set(),
+                            SDL.SDLK_f => keyinput.shoulder_r.set(),
                             SDL.SDLK_RETURN => keyinput.start.set(),
                             SDL.SDLK_RSHIFT => keyinput.select.set(),
                             else => {},
                         }
 
-                        system.bus9.io.shr.keyinput.fetchOr(keyinput.raw, .Monotonic);
+                        const input = (@as(u32, extkeyin.raw) << 16) | keyinput.raw;
+                        system.bus9.io.shr.input.set(.Or, input);
                     },
                     else => {},
                 }
