@@ -57,7 +57,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_00B0...0x0400_00DC => dma.read(T, &bus.dma, address) orelse 0x000_0000,
 
             // Timers
-            0x0400_0100...0x0400_010C => warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010C => warn("TODO(timer): read(T: {}, addr: 0x{X:0>8}) {}", .{ T, address, T }),
 
             0x0400_0180 => bus.io.shr.ipc._nds7.sync.raw,
             0x0400_0208 => @intFromBool(bus.io.ime),
@@ -73,7 +73,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_00B0...0x0400_00DE => dma.read(T, &bus.dma, address) orelse 0x0000,
 
             // Timers
-            0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010E => warn("TODO(timer): read(T: {}, addr: 0x{X:0>8}) {}", .{ T, address, T }),
 
             0x0400_0130 => bus.io.shr.input.keyinput().raw,
             0x0400_0136 => bus.io.shr.input.extkeyin().raw,
@@ -87,10 +87,10 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_00B0...0x0400_00DF => dma.read(T, &bus.dma, address) orelse 0x00,
 
             // Timers
-            0x0400_0100...0x0400_010F => warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010F => warn("TODO(timer): read(T: {}, addr: 0x{X:0>8}) {}", .{ T, address, T }),
 
             // RTC
-            0x0400_0138 => warn("TODO: RTC read", .{}),
+            0x0400_0138 => warn("TODO(rtc): read(T: {}, addr: 0x{X:0>8}) {}", .{ T, address, T }),
 
             0x0400_0240 => bus.vram.stat().raw,
             0x0400_0241 => bus.io.shr.wramcnt.raw,
@@ -109,7 +109,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00B0...0x0400_00DC => dma.write(T, &bus.dma, address, value),
 
             // Timers
-            0x0400_0100...0x0400_010C => log.warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010C => log.warn("TODO(timer): write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
 
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds7, value),
             0x0400_0208 => bus.io.ime = value & 1 == 1,
@@ -126,7 +126,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00B0...0x0400_00DE => dma.write(T, &bus.dma, address, value),
 
             // Timers
-            0x0400_0100...0x0400_010E => log.warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010E => log.warn("TODO(timer): write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
 
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds7, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds7, value),
@@ -139,10 +139,10 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00B0...0x0400_00DF => dma.write(T, &bus.dma, address, value),
 
             // Timers
-            0x0400_0100...0x0400_010F => log.warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010F => log.warn("TODO(timer): write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
 
             // RTC
-            0x0400_0138 => log.warn("TODO: RTC write", .{}),
+            0x0400_0138 => log.warn("TODO(rtc): write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
 
             0x0400_0208 => bus.io.ime = value & 1 == 1,
 

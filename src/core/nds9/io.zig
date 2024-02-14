@@ -58,7 +58,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_00E0...0x0400_00EC => std.mem.readInt(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)], .little),
 
             // Timers
-            0x0400_0100...0x0400_010C => warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010C => warn("TODO(timer): read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
 
             0x0400_0180 => bus.io.shr.ipc._nds9.sync.raw,
             0x0400_0208 => @intFromBool(bus.io.ime),
@@ -92,7 +92,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_00E0...0x0400_00EE => std.mem.readInt(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)], .little),
 
             // Timers
-            0x0400_0100...0x0400_010E => warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010E => warn("TODO(timer): read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
 
             0x0400_0004 => bus.ppu.io.nds9.dispstat.raw,
             0x0400_0130 => bus.io.shr.input.keyinput().raw,
@@ -125,7 +125,7 @@ pub fn read(bus: *const Bus, comptime T: type, address: u32) T {
             0x0400_00E0...0x0400_00EF => std.mem.readInt(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)], .little),
 
             // Timers
-            0x0400_0100...0x0400_010F => warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010F => warn("TODO(timer): read(T: {}, addr: 0x{X:0>8}) {} ", .{ T, address, T }),
 
             0x0400_0208 => @intFromBool(bus.io.ime),
 
@@ -173,7 +173,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00E0...0x0400_00EC => std.mem.writeInt(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)], value, .little),
 
             // Timers
-            0x0400_0100...0x0400_010C => log.warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010C => log.warn("TODO(timer): write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
 
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds9, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds9, value),
@@ -265,7 +265,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00E0...0x0400_00EE => std.mem.writeInt(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)], value, .little),
 
             // Timers
-            0x0400_0100...0x0400_010E => log.warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010E => log.warn("TODO(timer): write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
 
             0x0400_0180 => bus.io.shr.ipc.setIpcSync(.nds9, value),
             0x0400_0184 => bus.io.shr.ipc.setIpcFifoCnt(.nds9, value),
@@ -305,7 +305,7 @@ pub fn write(bus: *Bus, comptime T: type, address: u32, value: T) void {
             0x0400_00E0...0x0400_00EF => std.mem.writeInt(T, bus.io.dma_fill[address & 0xF ..][0..@sizeOf(T)], value, .little),
 
             // Timers
-            0x0400_0100...0x0400_010F => log.warn("TODO: impl timer", .{}),
+            0x0400_0100...0x0400_010F => log.warn("TODO(timer): write(T: {}, addr: 0x{X:0>8}, value: 0x{X:0>8})", .{ T, address, value }),
 
             0x0400_0208 => bus.io.ime = value & 1 == 1,
 

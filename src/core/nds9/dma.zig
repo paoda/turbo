@@ -223,7 +223,34 @@ fn Controller(comptime id: u2) type {
                     else => log.err("TODO: Implement DMA({}) {s} mode", .{ id, @tagName(start_timing) }),
                 }
 
-                log.debug("configured {s} transfer from 0x{X:0>8} -> 0x{X:0>8} ({} words) for DMA{}", .{ @tagName(start_timing), self.sad_latch, self.dad_latch, self._word_count, id });
+                // Debug stuff
+                {
+                    const sad_adj: Adjustment = @enumFromInt(new.sad_adj.read());
+                    const dad_adj: Adjustment = @enumFromInt(new.dad_adj.read());
+                    const byte_count = @as(u32, @sizeOf(u16)) << @intFromBool(new.transfer_type.read());
+
+                    const sad_final = switch (sad_adj) {
+                        .Increment, .IncrementReload => self.sad_latch +% self._word_count * byte_count,
+                        .Decrement => self.sad_latch -% self._word_count * byte_count,
+                        .Fixed => self.sad_latch,
+                    };
+
+                    const dad_final = switch (dad_adj) {
+                        .Increment, .IncrementReload => self.dad_latch +% self._word_count * byte_count,
+                        .Decrement => self.dad_latch -% self._word_count * byte_count,
+                        .Fixed => self.dad_latch,
+                    };
+
+                    log.debug("configured {s} transfer from 0x{X:0>8} -> 0x{X:0>8} to 0x{X:0>8} -> 0x{X:0>8} ({} words) for DMA{}", .{
+                        @tagName(start_timing),
+                        self.sad_latch,
+                        sad_final,
+                        self.dad_latch,
+                        dad_final,
+                        self._word_count,
+                        id,
+                    });
+                }
             }
 
             self.cnt.raw = halfword;
@@ -235,7 +262,7 @@ fn Controller(comptime id: u2) type {
         }
 
         pub fn step(self: *Self, cpu: *System.Arm946es) void {
-            const bus_ptr: *System.Bus7 = @ptrCast(@alignCast(cpu.bus.ptr));
+            const bus_ptr: *System.Bus9 = @ptrCast(@alignCast(cpu.bus.ptr));
 
             const is_fifo = (id == 1 or id == 2) and self.cnt.start_timing.read() == 0b11;
             const sad_adj: Adjustment = @enumFromInt(self.cnt.sad_adj.read());
