@@ -6,6 +6,7 @@ const emu = @import("core/emu.zig");
 const Ui = @import("platform.zig").Ui;
 const SharedCtx = @import("core/emu.zig").SharedCtx;
 const System = @import("core/emu.zig").System;
+const Sync = @import("core/emu.zig").Sync;
 const Scheduler = @import("core/Scheduler.zig");
 
 const Allocator = std.mem.Allocator;
@@ -68,16 +69,20 @@ pub fn main() !void {
 
     emu.fastBoot(system);
 
+    var ui = try Ui.init(allocator);
+    defer ui.deinit(allocator);
+
+    ui.setTitle(rom_title);
+
+    const sync = try allocator.create(Sync);
+    defer allocator.destroy(sync);
+
+    sync.init();
+
     if (result.args.gdb == 0) {
-        var ui = try Ui.init(allocator);
-        defer ui.deinit(allocator);
-
-        ui.setTitle(rom_title);
-        try ui.run(&scheduler, system);
+        try ui.run(&scheduler, system, sync);
     } else {
-        var should_quit: std.atomic.Value(bool) = std.atomic.Value(bool).init(false);
-
-        try emu.debug.run(allocator, system, &scheduler, &should_quit);
+        try emu.debug.run(allocator, &ui, &scheduler, system, sync);
     }
 }
 

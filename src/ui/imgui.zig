@@ -18,7 +18,7 @@ pub const State = struct {
     dim: Dimensions = .{ .width = 1600, .height = 900 },
 };
 
-pub fn draw(state: *const State, top_tex: GLuint, btm_tex: GLuint, system: System) bool {
+pub fn draw(state: *const State, top_tex: GLuint, btm_tex: GLuint, system: System) void {
     _ = system;
 
     zgui.backend.newFrame(@floatFromInt(state.dim.width), @floatFromInt(state.dim.height));
@@ -36,6 +36,4 @@ pub fn draw(state: *const State, top_tex: GLuint, btm_tex: GLuint, system: Syste
         zgui.image(@ptrFromInt(top_tex), .{ .w = w, .h = h });
         zgui.image(@ptrFromInt(btm_tex), .{ .w = w, .h = h });
     }
-
-    return true;
 }

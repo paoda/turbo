@@ -8,9 +8,11 @@ const imgui = @import("ui/imgui.zig");
 const emu = @import("core/emu.zig");
 
 const System = @import("core/emu.zig").System;
+const Sync = @import("core/emu.zig").Sync;
 const KeyInput = @import("core/io.zig").KeyInput;
 const ExtKeyIn = @import("core/io.zig").ExtKeyIn;
 const Scheduler = @import("core/Scheduler.zig");
+const FrameBuffer = @import("core/ppu.zig").FrameBuffer;
 
 const Allocator = std.mem.Allocator;
 
@@ -86,133 +88,161 @@ pub const Ui = struct {
         return SDL.SDL_GL_GetProcAddress(proc.ptr);
     }
 
-    pub fn run(self: *Self, scheduler: *Scheduler, system: System) !void {
-        // TODO: Sort this out please
+    pub fn setTitle(self: *@This(), title: [12]u8) void {
+        self.state.title = title ++ [_:0]u8{};
+    }
 
-        const vao_id = opengl_impl.vao();
-        defer gl.deleteVertexArrays(1, &[_]GLuint{vao_id});
-
-        const top_tex = opengl_impl.screenTex(system.bus9.ppu.fb.top(.front));
-        const btm_tex = opengl_impl.screenTex(system.bus9.ppu.fb.btm(.front));
-        const top_out_tex = opengl_impl.outTex();
-        const btm_out_tex = opengl_impl.outTex();
-        defer gl.deleteTextures(4, &[_]GLuint{ top_tex, top_out_tex, btm_tex, btm_out_tex });
-
-        const top_fbo = try opengl_impl.frameBuffer(top_out_tex);
-        const btm_fbo = try opengl_impl.frameBuffer(btm_out_tex);
-        defer gl.deleteFramebuffers(2, &[_]GLuint{ top_fbo, btm_fbo });
-
-        const prog_id = try opengl_impl.program();
-        defer gl.deleteProgram(prog_id);
+    pub fn run(self: *Self, scheduler: *Scheduler, system: System, sync: *Sync) !void {
+        const id = try opengl_impl.runInit(&system.bus9.ppu.fb);
+        defer id.deinit();
 
         var event: SDL.SDL_Event = undefined;
 
-        emu_loop: while (true) {
-            emu.runFrame(scheduler, system);
+        while (!sync.should_quit.load(.Monotonic)) {
+            emu.runFrame(scheduler, system); // TODO: run emu in separate thread
 
             while (SDL.SDL_PollEvent(&event) != 0) {
                 _ = zgui.backend.processEvent(&event);
-
-                switch (event.type) {
-                    SDL.SDL_QUIT => break :emu_loop,
-                    SDL.SDL_WINDOWEVENT => {
-                        if (event.window.event == SDL.SDL_WINDOWEVENT_RESIZED) {
-                            std.log.debug("window resized to: {}x{}", .{ event.window.data1, event.window.data2 });
-
-                            self.state.dim.width = @intCast(event.window.data1);
-                            self.state.dim.height = @intCast(event.window.data2);
-                        }
-                    },
-                    SDL.SDL_KEYDOWN => {
-                        // TODO: Make use of compare_and_xor?
-                        const key_code = event.key.keysym.sym;
-
-                        var keyinput: KeyInput = .{ .raw = 0x0000 };
-                        var extkeyin: ExtKeyIn = .{ .raw = 0x0000 };
-
-                        switch (key_code) {
-                            SDL.SDLK_UP => keyinput.up.set(),
-                            SDL.SDLK_DOWN => keyinput.down.set(),
-                            SDL.SDLK_LEFT => keyinput.left.set(),
-                            SDL.SDLK_RIGHT => keyinput.right.set(),
-                            SDL.SDLK_c => keyinput.a.set(),
-                            SDL.SDLK_x => keyinput.b.set(),
-                            SDL.SDLK_d => extkeyin.x.set(),
-                            SDL.SDLK_s => extkeyin.y.set(),
-                            SDL.SDLK_a => keyinput.shoulder_l.set(),
-                            SDL.SDLK_f => keyinput.shoulder_r.set(),
-                            SDL.SDLK_RETURN => keyinput.start.set(),
-                            SDL.SDLK_RSHIFT => keyinput.select.set(),
-                            else => {},
-                        }
-
-                        const input = (@as(u32, extkeyin.raw) << 16) | keyinput.raw;
-                        system.bus9.io.shr.input.set(.And, ~input);
-                    },
-                    SDL.SDL_KEYUP => {
-                        // TODO: Make use of compare_and_xor?
-                        const key_code = event.key.keysym.sym;
-
-                        var keyinput: KeyInput = .{ .raw = 0x0000 };
-                        var extkeyin: ExtKeyIn = .{ .raw = 0x0000 };
-
-                        switch (key_code) {
-                            SDL.SDLK_UP => keyinput.up.set(),
-                            SDL.SDLK_DOWN => keyinput.down.set(),
-                            SDL.SDLK_LEFT => keyinput.left.set(),
-                            SDL.SDLK_RIGHT => keyinput.right.set(),
-                            SDL.SDLK_c => keyinput.a.set(),
-                            SDL.SDLK_x => keyinput.b.set(),
-                            SDL.SDLK_d => extkeyin.x.set(),
-                            SDL.SDLK_s => extkeyin.y.set(),
-                            SDL.SDLK_a => keyinput.shoulder_l.set(),
-                            SDL.SDLK_f => keyinput.shoulder_r.set(),
-                            SDL.SDLK_RETURN => keyinput.start.set(),
-                            SDL.SDLK_RSHIFT => keyinput.select.set(),
-                            else => {},
-                        }
-
-                        const input = (@as(u32, extkeyin.raw) << 16) | keyinput.raw;
-                        system.bus9.io.shr.input.set(.Or, input);
-                    },
-                    else => {},
-                }
+                handleInput(&event, system, &self.state, sync);
             }
 
             {
-                gl.bindFramebuffer(gl.FRAMEBUFFER, top_fbo);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, id.top_fbo);
                 defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
                 gl.viewport(0, 0, nds_width, nds_height);
-                opengl_impl.drawScreen(top_tex, prog_id, vao_id, system.bus9.ppu.fb.top(.front));
+                opengl_impl.drawScreen(id.top_tex, id.prog_id, id.vao_id, system.bus9.ppu.fb.top(.front));
             }
 
             {
-                gl.bindFramebuffer(gl.FRAMEBUFFER, btm_fbo);
+                gl.bindFramebuffer(gl.FRAMEBUFFER, id.btm_fbo);
                 defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
 
                 gl.viewport(0, 0, nds_width, nds_height);
-                opengl_impl.drawScreen(btm_tex, prog_id, vao_id, system.bus9.ppu.fb.btm(.front));
+                opengl_impl.drawScreen(id.btm_tex, id.prog_id, id.vao_id, system.bus9.ppu.fb.btm(.front));
             }
 
-            const zgui_redraw = imgui.draw(&self.state, top_out_tex, btm_out_tex, system);
+            imgui.draw(&self.state, id.top_out_tex, id.btm_out_tex, system);
 
-            if (zgui_redraw) {
-                // Background Colour
-                const size = zgui.io.getDisplaySize();
-                gl.viewport(0, 0, @intFromFloat(size[0]), @intFromFloat(size[1]));
-                gl.clearColor(0, 0, 0, 1.0);
-                gl.clear(gl.COLOR_BUFFER_BIT);
+            // Background Colour
+            const size = zgui.io.getDisplaySize();
+            gl.viewport(0, 0, @intFromFloat(size[0]), @intFromFloat(size[1]));
+            gl.clearColor(0, 0, 0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
 
-                zgui.backend.draw();
-            }
-
+            zgui.backend.draw();
             SDL.SDL_GL_SwapWindow(self.window);
         }
     }
 
-    pub fn setTitle(self: *@This(), title: [12]u8) void {
-        self.state.title = title ++ [_:0]u8{};
+    pub fn debug_run(self: *Self, _: *Scheduler, system: System, sync: *Sync) !void {
+        const id = try opengl_impl.runInit(&system.bus9.ppu.fb);
+        defer id.deinit();
+
+        var event: SDL.SDL_Event = undefined;
+
+        while (!sync.should_quit.load(.Monotonic)) {
+            while (SDL.SDL_PollEvent(&event) != 0) {
+                _ = zgui.backend.processEvent(&event);
+                handleInput(&event, system, &self.state, sync);
+            }
+
+            {
+                gl.bindFramebuffer(gl.FRAMEBUFFER, id.top_fbo);
+                defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+
+                gl.viewport(0, 0, nds_width, nds_height);
+                opengl_impl.drawScreen(id.top_tex, id.prog_id, id.vao_id, system.bus9.ppu.fb.top(.front));
+            }
+
+            {
+                gl.bindFramebuffer(gl.FRAMEBUFFER, id.btm_fbo);
+                defer gl.bindFramebuffer(gl.FRAMEBUFFER, 0);
+
+                gl.viewport(0, 0, nds_width, nds_height);
+                opengl_impl.drawScreen(id.btm_tex, id.prog_id, id.vao_id, system.bus9.ppu.fb.btm(.front));
+            }
+
+            imgui.draw(&self.state, id.top_out_tex, id.btm_out_tex, system);
+
+            // Background Colour
+            const size = zgui.io.getDisplaySize();
+            gl.viewport(0, 0, @intFromFloat(size[0]), @intFromFloat(size[1]));
+            gl.clearColor(0, 0, 0, 1.0);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            zgui.backend.draw();
+            SDL.SDL_GL_SwapWindow(self.window);
+        }
+    }
+
+    fn handleInput(event: *SDL.SDL_Event, system: System, state: *imgui.State, sync: *Sync) void {
+        switch (event.type) {
+            SDL.SDL_QUIT => sync.should_quit.store(true, .Monotonic),
+            SDL.SDL_WINDOWEVENT => {
+                if (event.window.event == SDL.SDL_WINDOWEVENT_RESIZED) {
+                    std.log.debug("window resized to: {}x{}", .{ event.window.data1, event.window.data2 });
+
+                    state.dim.width = @intCast(event.window.data1);
+                    state.dim.height = @intCast(event.window.data2);
+
+                    zgui.io.setDisplaySize(@floatFromInt(event.window.data1), @floatFromInt(event.window.data2));
+                }
+            },
+            SDL.SDL_KEYDOWN => {
+                // TODO: Make use of compare_and_xor?
+                const key_code = event.key.keysym.sym;
+
+                var keyinput: KeyInput = .{ .raw = 0x0000 };
+                var extkeyin: ExtKeyIn = .{ .raw = 0x0000 };
+
+                switch (key_code) {
+                    SDL.SDLK_UP => keyinput.up.set(),
+                    SDL.SDLK_DOWN => keyinput.down.set(),
+                    SDL.SDLK_LEFT => keyinput.left.set(),
+                    SDL.SDLK_RIGHT => keyinput.right.set(),
+                    SDL.SDLK_c => keyinput.a.set(),
+                    SDL.SDLK_x => keyinput.b.set(),
+                    SDL.SDLK_d => extkeyin.x.set(),
+                    SDL.SDLK_s => extkeyin.y.set(),
+                    SDL.SDLK_a => keyinput.shoulder_l.set(),
+                    SDL.SDLK_f => keyinput.shoulder_r.set(),
+                    SDL.SDLK_RETURN => keyinput.start.set(),
+                    SDL.SDLK_RSHIFT => keyinput.select.set(),
+                    else => {},
+                }
+
+                const input = (@as(u32, extkeyin.raw) << 16) | keyinput.raw;
+                system.bus9.io.shr.input.set(.And, ~input);
+            },
+            SDL.SDL_KEYUP => {
+                // TODO: Make use of compare_and_xor?
+                const key_code = event.key.keysym.sym;
+
+                var keyinput: KeyInput = .{ .raw = 0x0000 };
+                var extkeyin: ExtKeyIn = .{ .raw = 0x0000 };
+
+                switch (key_code) {
+                    SDL.SDLK_UP => keyinput.up.set(),
+                    SDL.SDLK_DOWN => keyinput.down.set(),
+                    SDL.SDLK_LEFT => keyinput.left.set(),
+                    SDL.SDLK_RIGHT => keyinput.right.set(),
+                    SDL.SDLK_c => keyinput.a.set(),
+                    SDL.SDLK_x => keyinput.b.set(),
+                    SDL.SDLK_d => extkeyin.x.set(),
+                    SDL.SDLK_s => extkeyin.y.set(),
+                    SDL.SDLK_a => keyinput.shoulder_l.set(),
+                    SDL.SDLK_f => keyinput.shoulder_r.set(),
+                    SDL.SDLK_RETURN => keyinput.start.set(),
+                    SDL.SDLK_RSHIFT => keyinput.select.set(),
+                    else => {},
+                }
+
+                const input = (@as(u32, extkeyin.raw) << 16) | keyinput.raw;
+                system.bus9.io.shr.input.set(.Or, input);
+            },
+            else => {},
+        }
     }
 };
 
@@ -222,6 +252,46 @@ fn panic() noreturn {
 }
 
 const opengl_impl = struct {
+    const Ids = struct {
+        vao_id: GLuint,
+
+        top_tex: GLuint,
+        btm_tex: GLuint,
+        top_out_tex: GLuint,
+        btm_out_tex: GLuint,
+
+        top_fbo: GLuint,
+        btm_fbo: GLuint,
+
+        prog_id: GLuint,
+
+        fn deinit(self: Ids) void {
+            gl.deleteProgram(self.prog_id);
+            gl.deleteFramebuffers(2, &[_]GLuint{ self.top_fbo, self.btm_fbo });
+            gl.deleteTextures(4, &[_]GLuint{ self.top_tex, self.top_out_tex, self.btm_tex, self.btm_out_tex });
+            gl.deleteVertexArrays(1, &[_]GLuint{self.vao_id});
+        }
+    };
+
+    fn runInit(fb: *const FrameBuffer) !Ids {
+        const top_out_tex = opengl_impl.outTex();
+        const btm_out_tex = opengl_impl.outTex();
+
+        return .{
+            .vao_id = opengl_impl.vao(),
+
+            .top_tex = opengl_impl.screenTex(fb.top(.front)),
+            .btm_tex = opengl_impl.screenTex(fb.btm(.front)),
+            .top_out_tex = top_out_tex,
+            .btm_out_tex = btm_out_tex,
+
+            .top_fbo = try opengl_impl.frameBuffer(top_out_tex),
+            .btm_fbo = try opengl_impl.frameBuffer(btm_out_tex),
+
+            .prog_id = try opengl_impl.program(),
+        };
+    }
+
     fn drawScreen(tex_id: GLuint, prog_id: GLuint, vao_id: GLuint, buf: []const u8) void {
         gl.bindTexture(gl.TEXTURE_2D, tex_id);
         defer gl.bindTexture(gl.TEXTURE_2D, 0);

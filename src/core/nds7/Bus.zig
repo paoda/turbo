@@ -71,7 +71,7 @@ fn _read(self: *@This(), comptime T: type, comptime mode: Mode, address: u32) T 
     }
 
     return switch (aligned_addr) {
-        0x0000_0000...0x01FF_FFFF => self.bios.read(T, address),
+        0x0000_0000...0x01FF_FFFF => self.bios.read(T, aligned_addr),
         0x0200_0000...0x02FF_FFFF => std.mem.readInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count], .little),
         0x0300_0000...0x037F_FFFF => switch (self.io.shr.wramcnt.mode.read()) {
             0b00 => std.mem.readInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], .little),
@@ -105,7 +105,7 @@ fn _write(self: *@This(), comptime T: type, comptime mode: Mode, address: u32, v
     }
 
     switch (aligned_addr) {
-        0x0000_0000...0x01FF_FFFF => self.bios.write(T, address, value),
+        0x0000_0000...0x01FF_FFFF => self.bios.write(T, aligned_addr, value),
         0x0200_0000...0x02FF_FFFF => std.mem.writeInt(T, self.main[aligned_addr & 0x003F_FFFF ..][0..byte_count], value, .little),
         0x0300_0000...0x037F_FFFF => switch (self.io.shr.wramcnt.mode.read()) {
             0b00 => std.mem.writeInt(T, self.wram[aligned_addr & 0x0000_FFFF ..][0..byte_count], value, .little),

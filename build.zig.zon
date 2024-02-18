@@ -14,8 +14,8 @@
             .hash = "12202fa30d679d821292bcd953458b9e76097a5d16999489125a206db63a53392833",
         },
         .@"zba-gdbstub" = .{
-            .url = "https://git.musuka.dev/paoda/zba-gdbstub/archive/8d2c76e410357166f092008ff5c7f7f097a043a7.tar.gz",
-            .hash = "1220a171c7e14769386e3f4aab6aed53b5e176d654bdf1428a15b972effed750bf30",
+            .url = "https://git.musuka.dev/paoda/zba-gdbstub/archive/7ae72ed5a892d2fc6cc3f5511e2b96134d928b59.tar.gz",
+            .hash = "1220823e961f369e22b62edc1b4da3742af0a7cb420ae9a52ec33216ff5a8ef270c8",
         },
         .arm32 = .{
             .url = "https://git.musuka.dev/paoda/arm32/archive/6f0e27136072610e6dba97ff8aaf5e2ec86e2c09.tar.gz",

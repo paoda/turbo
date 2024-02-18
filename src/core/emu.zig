@@ -2,6 +2,7 @@ const std = @import("std");
 
 const Header = @import("cartridge.zig").Header;
 const Scheduler = @import("Scheduler.zig");
+const Ui = @import("../platform.zig").Ui;
 
 const Allocator = std.mem.Allocator;
 
@@ -404,6 +405,16 @@ pub fn fastBoot(system: System) void {
     }
 }
 
+pub const Sync = struct {
+    const Atomic = std.atomic.Value;
+
+    should_quit: Atomic(bool) = Atomic(bool).init(false),
+
+    pub fn init(self: *Sync) void {
+        self.* = .{};
+    }
+};
+
 pub const debug = struct {
     const Interface = @import("gdbstub").Emulator;
     const Server = @import("gdbstub").Server;
@@ -456,6 +467,8 @@ pub const debug = struct {
         return struct {
             system: System,
             scheduler: *Scheduler,
+
+            tick: u64 = 0,
 
             pub fn init(system: System, scheduler: *Scheduler) @This() {
                 return .{ .system = system, .scheduler = scheduler };
@@ -516,12 +529,20 @@ pub const debug = struct {
                         inline else => |halt| {
                             if (!dma9.step(system.arm946es) and comptime halt != .arm9) {
                                 system.arm946es.step();
-                                system.arm946es.step();
+
+                                switch (proc) {
+                                    .nds9 => did_step = true,
+                                    .nds7 => system.arm946es.step(),
+                                }
                             }
 
                             if (!dma7.step(system.arm7tdmi) and comptime halt != .arm7) {
-                                system.arm7tdmi.step();
-                                did_step = true;
+                                if (proc == .nds7 or self.tick % 2 == 0) system.arm7tdmi.step();
+
+                                if (proc == .nds7) {
+                                    did_step = true;
+                                    self.tick += 1;
+                                }
                             }
                         },
                     }
@@ -535,8 +556,8 @@ pub const debug = struct {
         };
     }
 
-    pub fn run(allocator: Allocator, system: System, scheduler: *Scheduler, should_quit: *AtomicBool) !void {
-        var wrapper = Wrapper(.nds7).init(system, scheduler);
+    pub fn run(allocator: Allocator, ui: *Ui, scheduler: *Scheduler, system: System, sync: *Sync) !void {
+        var wrapper = Wrapper(.nds9).init(system, scheduler);
 
         var emu_interface = wrapper.interface(allocator);
         defer emu_interface.deinit();
@@ -544,7 +565,9 @@ pub const debug = struct {
         var server = try Server.init(emu_interface, .{ .target = nds7.target, .memory_map = nds7.memory_map });
         defer server.deinit(allocator);
 
-        const thread = try std.Thread.spawn(.{}, Server.run, .{ &server, allocator, should_quit });
+        const thread = try std.Thread.spawn(.{}, Server.run, .{ &server, allocator, &sync.should_quit });
         defer thread.join();
+
+        try ui.debug_run(scheduler, system, sync);
     }
 };
