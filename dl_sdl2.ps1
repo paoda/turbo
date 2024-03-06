@@ -3,9 +3,9 @@ $ArchiveFile = ".\SDL2-devel-mingw.zip"
 $Json = @"
 {
 	"x86_64-windows-gnu": {
-		"include": "SDL2\\include",
-		"libs": "SDL2\\lib",
-		"bin": "SDL2\\bin"
+		"include": ".build_config\\SDL2\\include",
+		"libs": ".build_config\\SDL2\\lib",
+		"bin": ".build_config\\SDL2\\bin"
 	}
 }	
 "@
