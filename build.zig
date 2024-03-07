@@ -36,14 +36,14 @@ pub fn build(b: *std.Build) void {
 
     // https://github.com/MasterQ32/SDL.zig
     const sdk = Sdk.init(b, null);
-    sdk.link(exe, .static);
-    exe.root_module.addImport("sdl2", sdk.getNativeModule());
+    sdk.link(exe, .dynamic);
 
     // https://git.musuka.dev/paoda/zgui
-
     const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = .sdl2_opengl3 } });
+    sdk.link(zgui_pkg.zgui_c_cpp, .dynamic);
+
+    exe.root_module.addImport("sdl2", sdk.getNativeModule());
     zgui_pkg.link(exe);
-    sdk.link(zgui_pkg.zgui_c_cpp, .static);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
