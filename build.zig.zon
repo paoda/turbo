@@ -18,8 +18,8 @@
             .hash = "1220823e961f369e22b62edc1b4da3742af0a7cb420ae9a52ec33216ff5a8ef270c8",
         },
         .arm32 = .{
-            .url = "https://git.musuka.dev/paoda/arm32/archive/6f0e27136072610e6dba97ff8aaf5e2ec86e2c09.tar.gz",
-            .hash = "122047d0affe12b9e9e9c655a7ba6d51b311f02d688e9f1c9a91394a03103f1c0cd5",
+            .url = "https://git.musuka.dev/paoda/arm32/archive/0010029783a907b2c73dc7741d9d81471ff98592.tar.gz",
+            .hash = "1220a0c28bb7bbb6df57bbaf91741d3e032f8fbf9e273f41d19384f6bcd1d3adf7d3",
         },
     },
 }
