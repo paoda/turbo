@@ -1,7 +1,5 @@
 const std = @import("std");
-
 const Sdk = @import("lib/SDL.zig/build.zig");
-const zgui = @import("lib/zgui/build.zig");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -27,23 +25,22 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const sdk = Sdk.init(b, null); // https://github.com/MasterQ32/SDL.zig
+    const zgui = b.dependency("zgui", .{ .shared = false, .with_implot = true, .backend = .sdl2_opengl3 });
+    const imgui = zgui.artifact("imgui");
+
     exe.root_module.addImport("arm32", b.dependency("arm32", .{}).module("arm32"));
     exe.root_module.addImport("gdbstub", b.dependency("zba-gdbstub", .{}).module("gdbstub"));
     exe.root_module.addImport("zig-clap", b.dependency("zig-clap", .{}).module("clap"));
+    exe.root_module.addImport("zgui", zgui.module("root"));
+    exe.root_module.addImport("sdl2", sdk.getNativeModule());
 
     exe.root_module.addAnonymousImport("bitfield", .{ .root_source_file = .{ .path = "lib/bitfield.zig" } }); // https://github.com/FlorenceOS/
     exe.root_module.addAnonymousImport("gl", .{ .root_source_file = .{ .path = "lib/gl.zig" } }); // https://github.com/MasterQ32/zig-opengl
 
-    // https://github.com/MasterQ32/SDL.zig
-    const sdk = Sdk.init(b, null);
     sdk.link(exe, .dynamic);
-
-    // https://git.musuka.dev/paoda/zgui
-    const zgui_pkg = zgui.package(b, target, optimize, .{ .options = .{ .backend = .sdl2_opengl3 } });
-    sdk.link(zgui_pkg.zgui_c_cpp, .dynamic);
-
-    exe.root_module.addImport("sdl2", sdk.getNativeModule());
-    zgui_pkg.link(exe);
+    sdk.link(imgui, .dynamic);
+    exe.linkLibrary(imgui);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
