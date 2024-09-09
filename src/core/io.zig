@@ -429,7 +429,7 @@ const Input = struct {
     inner: u32 = 0x007F_03FF,
 
     pub inline fn keyinput(self: *const Input) KeyInput {
-        const value = @atomicLoad(u32, &self.inner, .Monotonic);
+        const value = @atomicLoad(u32, &self.inner, .monotonic);
         return .{ .raw = @truncate(value) };
     }
 
@@ -440,11 +440,11 @@ const Input = struct {
             else => @compileError("not supported"),
         };
 
-        _ = @atomicRmw(u32, &self.inner, op, msked, .Monotonic);
+        _ = @atomicRmw(u32, &self.inner, op, msked, .monotonic);
     }
 
     pub inline fn extkeyin(self: *const Input) ExtKeyIn {
-        const value = @atomicLoad(u32, &self.inner, .Monotonic);
+        const value = @atomicLoad(u32, &self.inner, .monotonic);
         const shifted: u16 = @truncate(value >> 16);
 
         return .{ .raw = shifted | 0b00110100 }; // bits 2, 4, 5 are always set
@@ -457,10 +457,10 @@ const Input = struct {
             else => @compileError("not supported"),
         };
 
-        _ = @atomicRmw(u32, &self.inner, op, msked, .Monotonic);
+        _ = @atomicRmw(u32, &self.inner, op, msked, .monotonic);
     }
 
     pub inline fn set(self: *Input, comptime op: AtomicRmwOp, value: u32) void {
-        _ = @atomicRmw(u32, &self.inner, op, value, .Monotonic);
+        _ = @atomicRmw(u32, &self.inner, op, value, .monotonic);
     }
 };

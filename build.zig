@@ -1,5 +1,5 @@
 const std = @import("std");
-const Sdk = @import("lib/SDL.zig/build.zig");
+const sdl = @import("lib/SDL.zig/build.zig");
 
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
@@ -20,26 +20,26 @@ pub fn build(b: *std.Build) void {
         .name = "turbo",
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    const sdk = Sdk.init(b, null); // https://github.com/MasterQ32/SDL.zig
+    const sdk = sdl.init(b, null, null);
     const zgui = b.dependency("zgui", .{ .shared = false, .with_implot = true, .backend = .sdl2_opengl3 });
     const imgui = zgui.artifact("imgui");
 
-    exe.root_module.addImport("arm32", b.dependency("arm32", .{}).module("arm32"));
-    exe.root_module.addImport("gdbstub", b.dependency("zba-gdbstub", .{}).module("gdbstub"));
-    exe.root_module.addImport("zig-clap", b.dependency("zig-clap", .{}).module("clap"));
-    exe.root_module.addImport("zgui", zgui.module("root"));
-    exe.root_module.addImport("sdl2", sdk.getNativeModule());
+    exe.root_module.addImport("arm32", b.dependency("arm32", .{}).module("arm32")); // https://git.musuka.dev/paoda/arm32
+    exe.root_module.addImport("gdbstub", b.dependency("zba-gdbstub", .{}).module("zba-gdbstub")); // https://git.musuka.dev/paoda/zba-gdbstub
+    exe.root_module.addImport("zig-clap", b.dependency("zig-clap", .{}).module("clap")); // https://github.com/Hejsil/zig-clap
+    exe.root_module.addImport("zgui", zgui.module("root")); // https://git.musuka.dev/paoda/zgui
+    exe.root_module.addImport("sdl2", sdk.getNativeModule()); // https://github.com/MasterQ32/SDL.zig
 
-    exe.root_module.addAnonymousImport("bitfield", .{ .root_source_file = .{ .path = "lib/bitfield.zig" } }); // https://github.com/FlorenceOS/
-    exe.root_module.addAnonymousImport("gl", .{ .root_source_file = .{ .path = "lib/gl.zig" } }); // https://github.com/MasterQ32/zig-opengl
+    exe.root_module.addAnonymousImport("bitfield", .{ .root_source_file = b.path("lib/bitfield.zig") }); // https://github.com/FlorenceOS/
+    exe.root_module.addAnonymousImport("gl", .{ .root_source_file = b.path("lib/gl.zig") }); // https://github.com/MasterQ32/zig-opengl
 
-    sdk.link(exe, .dynamic);
-    sdk.link(imgui, .dynamic);
+    sdk.link(exe, .dynamic, .SDL2);
+    sdk.link(imgui, .dynamic, .SDL2);
     exe.linkLibrary(imgui);
 
     // This declares intent for the executable to be installed into the
@@ -73,7 +73,7 @@ pub fn build(b: *std.Build) void {
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });

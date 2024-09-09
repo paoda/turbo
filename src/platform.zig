@@ -98,7 +98,7 @@ pub const Ui = struct {
 
         var event: SDL.SDL_Event = undefined;
 
-        while (!sync.should_quit.load(.Monotonic)) {
+        while (!sync.should_quit.load(.monotonic)) {
             emu.runFrame(scheduler, system); // TODO: run emu in separate thread
 
             while (SDL.SDL_PollEvent(&event) != 0) {
@@ -141,7 +141,7 @@ pub const Ui = struct {
 
         var event: SDL.SDL_Event = undefined;
 
-        while (!sync.should_quit.load(.Monotonic)) {
+        while (!sync.should_quit.load(.monotonic)) {
             while (SDL.SDL_PollEvent(&event) != 0) {
                 _ = zgui.backend.processEvent(&event);
                 handleInput(&event, system, &self.state, sync);
@@ -178,7 +178,7 @@ pub const Ui = struct {
 
     fn handleInput(event: *SDL.SDL_Event, system: System, state: *imgui.State, sync: *Sync) void {
         switch (event.type) {
-            SDL.SDL_QUIT => sync.should_quit.store(true, .Monotonic),
+            SDL.SDL_QUIT => sync.should_quit.store(true, .monotonic),
             SDL.SDL_WINDOWEVENT => {
                 if (event.window.event == SDL.SDL_WINDOWEVENT_RESIZED) {
                     std.log.debug("window resized to: {}x{}", .{ event.window.data1, event.window.data2 });
